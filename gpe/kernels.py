@@ -2,26 +2,31 @@ import cupy as cp
 
 static_real_halfstep = cp.RawKernel(
 r'''
+#include"static_potentials.cuh"
 #include <cupy/complex.cuh>
 extern "C" __global__
 void static_real_halfstep(complex<double>* psi, const complex<double>* V_static, 
-const double beta, const double dt,const long long N_grid ) 
+const double* x_array, const double beta, const double dt,const long long N_grid ) 
 
 {
     const long long tid =(long long) blockDim.x * blockIdx.x + threadIdx.x;
     const long long count=(long long)N_grid*N_grid*N_grid;
     if (tid>=count) return;
+    long long k=tid%N_grid;
+    long long j=(tid%((long long)N_grid*N_grid))/N_grid;
+    long long i=tid/((long long)N_grid*N_grid);
     
     double abs2psi=psi[tid].real()*psi[tid].real()+psi[tid].imag()*psi[tid].imag();
     double V_static_real=V_static[tid].real();
     double V_static_imag=V_static[tid].imag();
-    double real_phase= (V_static_real+beta*abs2psi)*(dt/2);
+    double extra_V=kick(x_array[j],1);
+    double real_phase= (V_static_real+beta*abs2psi+extra_V)*(dt/2);
     double imag_phase=V_static_imag*(dt/2);
     complex<double> propagator=exp(complex<double>(imag_phase,-real_phase));
     psi[tid]=psi[tid]*propagator;
     
 }
-''', 'static_real_halfstep')
+''', 'static_real_halfstep', options=('-Igpe',))
 
 
 dynamic_real_halfstep = cp.RawKernel(
@@ -41,7 +46,7 @@ const double* x_array, const double beta, const double dt,const long long N_grid
     long long i=tid/((long long)N_grid*N_grid);
     const double x=x_array[i];
     const double y=x_array[j];
-    const double time_potential=rotation(x,y,1,1,t);
+    const double time_potential=rotation(x,y,0.065,0.015,t);
     double abs2psi=psi[tid].real()*psi[tid].real()+psi[tid].imag()*psi[tid].imag();
     double V_static_real=V_static[tid].real();
     double V_static_imag=V_static[tid].imag();
@@ -51,7 +56,7 @@ const double* x_array, const double beta, const double dt,const long long N_grid
     psi[tid]=psi[tid]*propagator;
     
 }
-''', 'dynamic_real_halfstep')
+''', 'dynamic_real_halfstep', options=('-Igpe',))
 
 
 
