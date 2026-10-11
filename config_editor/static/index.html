@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPE · Experiment builder</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="GPE experiment builder"><span class="brand-mark">ψ</span><span>GPE<span class="brand-sub">EXPERIMENT BUILDER</span></span></a>
+    <div class="top-actions">
+      <span class="local-badge"><span></span> Local editor</span>
+      <button id="new-config" class="quiet">New</button>
+      <button id="import-config" class="secondary">Open YAML</button>
+      <button id="save-config" class="primary" disabled>Save YAML <span aria-hidden="true">↗</span></button>
+      <input id="import-file" type="file" accept=".yaml,.yml,text/yaml,application/yaml" hidden>
+    </div>
+  </header>
+  <main>
+    <section class="intro">
+      <div><div class="eyebrow">SET UP YOUR NEXT RUN</div><h1>Build the sequence.</h1><p>Define the stages here. Take the configuration to CSD3.</p></div>
+    </section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section class="global-card" aria-label="Overall parameters">
+      <div class="global-title"><span class="section-number">01</span><div><h2>Simulation space</h2><p>Shared across all stages</p></div></div>
+      <label class="field">Simulation range <span class="unit">dimensionless</span><input id="simulation-range" data-global="simulation_range" type="number" min="0" step="any"></label>
+      <label class="field">Grid size <span class="unit">per axis</span><div class="input-suffix"><input id="grid-size" data-global="N_grids" type="number" min="2" step="1"><span>³</span></div></label>
+      <label class="field output-field">Output root <span class="unit">on HPC</span><input id="output-root" data-global="output_root" type="text" spellcheck="false"></label>
+    </section>
+    <div class="workspace" id="workspace">
+      <aside class="sequence-panel">
+        <div class="rail-heading"><h2>Stages <span id="stage-count" class="count">1</span></h2><span class="flow-label">IN ORDER</span></div>
+        <nav id="stage-list" aria-label="Simulation stages"></nav>
+        <button id="add-stage" class="add-stage"><span aria-hidden="true">＋</span> Add stage</button>
+        <div class="sequence-summary"><div class="eyebrow">SEQUENCE OVERVIEW</div><dl><div><dt>Total steps</dt><dd id="total-steps">—</dd></div><div><dt>Real time</dt><dd id="real-time">—</dd></div><div><dt>Grid spacing</dt><dd id="grid-spacing">—</dd></div><div><dt>One ψ array</dt><dd id="state-memory">—</dd></div></dl><p>Double precision throughout. Memory shown is for ψ only.</p></div>
+      </aside>
+      <section class="stage-panel" aria-label="Stage settings">
+        <div class="stage-heading"><div><div class="eyebrow" id="stage-number">STAGE 01</div><h2 id="stage-heading">Preparation</h2></div><div id="stage-tools" class="stage-tools"></div></div>
+        <div class="tabs" role="tablist" aria-label="Stage sections">
+          <button class="tab active" role="tab" aria-selected="true" data-tab="evolution">Evolution</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="potentials">Potentials</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="outputs">Monitor &amp; save</button>
+        </div>
+        <div id="editor" class="editor" role="tabpanel"></div>
+      </section>
+      <aside class="yaml-panel" id="yaml-panel" hidden>
+        <div class="yaml-heading"><h2>YAML preview</h2><button id="copy-yaml" class="quiet">Copy</button></div>
+        <p>The file your HPC runner will read.</p>
+        <textarea id="yaml-preview" aria-label="YAML preview" spellcheck="false" readonly></textarea>
+      </aside>
+    </div>
+    <section id="validation" class="validation" aria-label="Configuration issues" hidden></section>
+    <footer><div class="status"><span id="status-dot"></span><span id="validation-status">Loading configuration…</span></div><button id="toggle-preview" class="text-button" aria-expanded="false">Show YAML preview <span aria-hidden="true">{ }</span></button></footer>
+    <p class="scope-note">Configuration editor · The staged simulation runner is the next component; this tool does not submit or run a simulation.</p>
+  </main>
+  <dialog id="save-dialog">
+    <form method="dialog"><button class="close-dialog" aria-label="Close save dialog">×</button></form>
+    <div class="eyebrow">READY TO TAKE WITH YOU</div><h2>Save your configuration</h2><p>This saves a YAML file on this computer. Copy it to CSD3 when you are ready.</p>
+    <label class="field">Local file path<input id="save-path" type="text" spellcheck="false" placeholder="~/Downloads/experiment.yaml"></label>
+    <label class="check-line"><input id="overwrite" type="checkbox"> Replace existing file</label>
+    <div id="save-error" class="inline-error" role="alert" hidden></div>
+    <div class="dialog-actions"><button id="download-yaml" class="secondary">Download instead</button><button id="write-yaml" class="primary">Save file</button></div>
+  </dialog>
+  <dialog id="replace-dialog">
+    <h2>Replace this draft?</h2><p>Your current browser draft will be replaced. Save it first if you want to keep it.</p>
+    <div class="dialog-actions"><button id="cancel-replace" class="secondary">Keep editing</button><button id="confirm-replace" class="primary">Replace draft</button></div>
+  </dialog>
+</body>
+</html>

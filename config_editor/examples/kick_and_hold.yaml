@@ -1,0 +1,167 @@
+# Editable three-stage example; review all settings before running.
+# GPE experiment configuration — schema 2
+# Double precision. Lengths and times are dimensionless; a is in Bohr radii.
+# Every stage starts at t = 0. Intervals count completed steps; 0 disables.
+# Gaussian disorder covers the whole grid. Potential expressions use Python syntax.
+schema_version: 2
+simulation:
+  simulation_range: 70
+  N_grids: 256
+  output_root: simulation_results
+stages:
+- name: Preparation
+  evolution:
+    type: imaginary
+    steps: 1000
+    dt: 0.002
+  initial_state:
+    type: gaussian
+    sigma: 10
+    path: ''
+  potential:
+    static:
+      enabled: false
+      expression: '0'
+    dynamic:
+      enabled: false
+      expression: '0'
+  box:
+    enabled: true
+    R: 25
+    L: 50
+    trap_depth: 25
+    wall_thickness: 2
+  absorber:
+    enabled: false
+    activation_distance: 5
+    strength: 100
+  noise:
+    enabled: false
+    fraction_of_trap_depth: 0.01
+    seed: 42
+    correlation_length: 0.0
+  cloud:
+    a: 0
+    N_atom: 150000
+  monitor:
+    print_scalar_interval: 50
+    show_nk_interval: 0
+    show_TOF_image_interval: 0
+    show_verticle_TOF_interval: 0
+    show_TOF_slice_interval: 0
+    show_verticle_TOF_slice_interval: 0
+    show_magnifier_interval: 0
+    show_magnifier_slice_interval: 0
+    show_phase_interval: 0
+  save:
+    directory: ''
+    scalar_interval: 50
+    nk_interval: 0
+    psi_interval: 0
+    checkpoint_interval: 0
+    save_initial: false
+    save_final: true
+- name: Bias pulse
+  evolution:
+    type: real
+    steps: 800
+    dt: 0.01
+  initial_state:
+    type: continue
+    sigma: 3.0
+    path: ''
+  potential:
+    static:
+      enabled: true
+      expression: 0.24*y
+    dynamic:
+      enabled: false
+      expression: '0'
+  box:
+    enabled: true
+    R: 25
+    L: 50
+    trap_depth: 9
+    wall_thickness: 2
+  absorber:
+    enabled: true
+    activation_distance: 5
+    strength: 100
+  noise:
+    enabled: true
+    fraction_of_trap_depth: 0.01
+    seed: 42
+    correlation_length: 0.0
+  cloud:
+    a: 0
+    N_atom: 150000
+  monitor:
+    print_scalar_interval: 1000
+    show_nk_interval: 3000
+    show_TOF_image_interval: 2000
+    show_verticle_TOF_interval: 2000
+    show_TOF_slice_interval: 0
+    show_verticle_TOF_slice_interval: 0
+    show_magnifier_interval: 0
+    show_magnifier_slice_interval: 2000
+    show_phase_interval: 2000
+  save:
+    directory: ''
+    scalar_interval: 1000
+    nk_interval: 3000
+    psi_interval: 0
+    checkpoint_interval: 0
+    save_initial: false
+    save_final: true
+- name: Hold
+  evolution:
+    type: real
+    steps: 41000
+    dt: 0.01
+  initial_state:
+    type: continue
+    sigma: 3.0
+    path: ''
+  potential:
+    static:
+      enabled: false
+      expression: '0'
+    dynamic:
+      enabled: false
+      expression: '0'
+  box:
+    enabled: true
+    R: 25
+    L: 50
+    trap_depth: 25
+    wall_thickness: 2
+  absorber:
+    enabled: true
+    activation_distance: 5
+    strength: 100
+  noise:
+    enabled: true
+    fraction_of_trap_depth: 0.01
+    seed: 42
+    correlation_length: 0.0
+  cloud:
+    a: 0
+    N_atom: 150000
+  monitor:
+    print_scalar_interval: 1000
+    show_nk_interval: 3000
+    show_TOF_image_interval: 2000
+    show_verticle_TOF_interval: 2000
+    show_TOF_slice_interval: 0
+    show_verticle_TOF_slice_interval: 0
+    show_magnifier_interval: 0
+    show_magnifier_slice_interval: 2000
+    show_phase_interval: 2000
+  save:
+    directory: ''
+    scalar_interval: 1000
+    nk_interval: 3000
+    psi_interval: 0
+    checkpoint_interval: 0
+    save_initial: false
+    save_final: true

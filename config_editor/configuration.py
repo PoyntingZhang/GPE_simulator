@@ -1,0 +1,241 @@
+"""Configuration data shared by the local editor and its YAML interface."""
+
+import ast
+import copy
+import math
+from pathlib import Path
+
+import yaml
+
+from expressions import is_zero, parse_expression
+
+
+MONITOR_FIELDS = (
+    "print_scalar_interval", "show_nk_interval", "show_TOF_image_interval",
+    "show_verticle_TOF_interval", "show_TOF_slice_interval",
+    "show_verticle_TOF_slice_interval", "show_magnifier_interval",
+    "show_magnifier_slice_interval", "show_phase_interval",
+)
+SAVE_INTERVALS = ("scalar_interval", "nk_interval", "psi_interval", "checkpoint_interval")
+
+
+def project_defaults():
+    values = dict(N_grids=256, simulation_range=70, R=25, L=50, U_D=49,
+                  wallthickness=2, r_abs=5, A_abs=100, a=100, N_atom=150000, dt=0.01)
+    path = Path(__file__).resolve().parent.parent / "gpe" / "config.py"
+    if path.exists():
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                name = getattr(node.targets[0], "id", None)
+                if name in values:
+                    try:
+                        values[name] = ast.literal_eval(node.value)
+                    except (ValueError, TypeError):
+                        pass
+    return values
+
+
+def new_stage(imaginary=False):
+    cfg = project_defaults()
+    monitor = dict.fromkeys(MONITOR_FIELDS, 0)
+    monitor["print_scalar_interval"] = 1000
+    return {
+        "name": "",
+        "evolution": {"type": "imaginary" if imaginary else "real", "steps": 2000, "dt": cfg["dt"]},
+        "initial_state": {"type": "gaussian" if imaginary else "continue", "sigma": 3.0, "path": ""},
+        "potential": {
+            "static": {"enabled": False, "expression": "0"},
+            "dynamic": {"enabled": False, "expression": "0"},
+        },
+        "box": {"enabled": True, "R": cfg["R"], "L": cfg["L"],
+                "trap_depth": cfg["U_D"], "wall_thickness": cfg["wallthickness"]},
+        "absorber": {"enabled": not imaginary, "activation_distance": cfg["r_abs"], "strength": cfg["A_abs"]},
+        "noise": {"enabled": False, "fraction_of_trap_depth": 0.01, "seed": 42,
+                  "correlation_length": 0.0},
+        "cloud": {"a": cfg["a"], "N_atom": cfg["N_atom"]},
+        "monitor": monitor,
+        "save": {"directory": "", "scalar_interval": 1000, "nk_interval": 0,
+                 "psi_interval": 0, "checkpoint_interval": 0,
+                 "save_initial": False, "save_final": True},
+    }
+
+
+def new_config():
+    cfg = project_defaults()
+    stage = new_stage(imaginary=True)
+    stage["name"] = "Preparation"
+    return {"schema_version": 2,
+            "simulation": {"simulation_range": cfg["simulation_range"],
+                           "N_grids": cfg["N_grids"], "output_root": "simulation_results"},
+            "stages": [stage]}
+
+
+class ConfigError(ValueError):
+    def __init__(self, errors):
+        self.errors = errors
+        super().__init__("; ".join(item["message"] for item in errors))
+
+
+def normalize_config(raw):
+    """Fill optional settings, reject unknown fields, and validate physical inputs."""
+    errors = []
+
+    def error(path, message):
+        errors.append({"path": path, "message": message})
+
+    def merge(value, default, path):
+        if not isinstance(value, dict):
+            error(path, f"{path or 'Configuration'} must be a mapping.")
+            return copy.deepcopy(default)
+        result = copy.deepcopy(default)
+        for key, item in value.items():
+            child = f"{path}.{key}" if path else str(key)
+            if key not in default:
+                error(child, f"Unknown setting: {child}.")
+            elif isinstance(default[key], dict):
+                result[key] = merge(item, default[key], child)
+            else:
+                result[key] = copy.deepcopy(item)
+        return result
+
+    if not isinstance(raw, dict):
+        raise ConfigError([{"path": "", "message": "Configuration must be a YAML mapping."}])
+    base = new_config()
+    config = merge(raw, base, "")
+    if type(config["schema_version"]) is not int or config["schema_version"] != 2:
+        error("schema_version", "Use schema_version: 2 with separate static and dynamic potential expressions.")
+
+    def number(container, key, path, minimum=None, positive=False, integer=False):
+        value = container[key]
+        valid = type(value) in (int, float) and math.isfinite(value)
+        if integer:
+            valid = valid and type(value) is int and abs(value) <= 2**53 - 1
+        if not valid or (positive and value <= 0) or (minimum is not None and value < minimum):
+            qualifier = "positive " if positive else "non-negative " if minimum == 0 else ""
+            error(f"{path}.{key}", f"{path}.{key} must be a {qualifier}{'integer' if integer else 'finite number'}" +
+                  (f" ≥ {minimum}." if minimum not in (None, 0) else "."))
+
+    def text(container, key, path, required=False):
+        value = container[key]
+        if not isinstance(value, str) or (required and not value.strip()):
+            error(f"{path}.{key}", f"{path}.{key} must be {'non-empty ' if required else ''}text.")
+
+    def choice(container, key, path, choices):
+        if container[key] not in choices:
+            error(f"{path}.{key}", f"{path}.{key} must be one of: {', '.join(choices)}.")
+
+    def boolean(container, key, path):
+        if type(container[key]) is not bool:
+            error(f"{path}.{key}", f"{path}.{key} must be true or false.")
+
+    sim = config["simulation"]
+    number(sim, "N_grids", "simulation", minimum=2, integer=True)
+    number(sim, "simulation_range", "simulation", positive=True)
+    text(sim, "output_root", "simulation", required=True)
+    stages = raw.get("stages")
+    if not isinstance(stages, list) or not stages:
+        error("stages", "Add at least one stage.")
+        stages = []
+    config["stages"] = []
+    for index, raw_stage in enumerate(stages):
+        path = f"stages.{index}"
+        stage = merge(raw_stage, new_stage(imaginary=index == 0), path)
+        config["stages"].append(stage)
+        text(stage, "name", path)
+        evo = stage["evolution"]
+        choice(evo, "type", f"{path}.evolution", ("imaginary", "real"))
+        number(evo, "steps", f"{path}.evolution", positive=True, integer=True)
+        number(evo, "dt", f"{path}.evolution", positive=True)
+        initial = stage["initial_state"]
+        choice(initial, "type", f"{path}.initial_state", ("gaussian", "load", "continue"))
+        text(initial, "path", f"{path}.initial_state", required=initial["type"] == "load")
+        number(initial, "sigma", f"{path}.initial_state", positive=True)
+        if index == 0 and initial["type"] == "continue":
+            error(f"{path}.initial_state.type", "Stage 1 needs a Gaussian or a loaded state; there is no previous stage.")
+        potential = stage["potential"]
+        for kind in ("static", "dynamic"):
+            component = potential[kind]
+            component_path = f"{path}.potential.{kind}"
+            boolean(component, "enabled", component_path)
+            try:
+                expression = parse_expression(component["expression"], time_dependent=kind == "dynamic")
+                if is_zero(expression):
+                    component["enabled"] = False
+            except ValueError as exc:
+                error(f"{component_path}.expression", str(exc))
+        if evo["type"] == "imaginary" and potential["dynamic"]["enabled"]:
+            error(f"{path}.potential.dynamic.enabled", "Imaginary time evolution does not accept a time dependent potential.")
+        for group in ("box", "absorber", "noise"):
+            boolean(stage[group], "enabled", f"{path}.{group}")
+        if evo["type"] == "imaginary" and stage["absorber"]["enabled"]:
+            error(f"{path}.absorber.enabled", "Imaginary time evolution does not accept an absorber.")
+        for key in ("R", "L", "wall_thickness"):
+            number(stage["box"], key, f"{path}.box", positive=True)
+        number(stage["box"], "trap_depth", f"{path}.box", minimum=0)
+        for key in ("activation_distance", "strength"):
+            number(stage["absorber"], key, f"{path}.absorber", minimum=0)
+        for key in ("fraction_of_trap_depth", "correlation_length"):
+            number(stage["noise"], key, f"{path}.noise", minimum=0)
+        number(stage["noise"], "seed", f"{path}.noise", minimum=0, integer=True)
+        if stage["noise"]["enabled"] and not stage["box"]["enabled"]:
+            error(f"{path}.noise.enabled", "Trap-dependent noise needs an enabled box to define its depth.")
+        number(stage["cloud"], "a", f"{path}.cloud")
+        number(stage["cloud"], "N_atom", f"{path}.cloud", positive=True, integer=True)
+        for key in MONITOR_FIELDS:
+            number(stage["monitor"], key, f"{path}.monitor", minimum=0, integer=True)
+        for key in SAVE_INTERVALS:
+            number(stage["save"], key, f"{path}.save", minimum=0, integer=True)
+        for key in ("save_initial", "save_final"):
+            boolean(stage["save"], key, f"{path}.save")
+        text(stage["save"], "directory", f"{path}.save")
+    if errors:
+        raise ConfigError(errors)
+    return config
+
+
+class UniqueLoader(yaml.SafeLoader):
+    pass
+
+
+def unique_mapping(loader, node, deep=False):
+    loader.flatten_mapping(node)
+    result = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if not isinstance(key, (str, int, float, bool, type(None))):
+            raise ValueError("YAML mapping keys must be scalar values.")
+        if key in result:
+            raise ValueError(f"Duplicate YAML key: {key}")
+        result[key] = loader.construct_object(value_node, deep=deep)
+    return result
+
+
+UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
+
+
+def load_yaml(source):
+    try:
+        return normalize_config(yaml.load(source, Loader=UniqueLoader))
+    except (yaml.YAMLError, ValueError, RecursionError) as exc:
+        if isinstance(exc, ConfigError):
+            raise
+        raise ConfigError([{"path": "", "message": f"Cannot read YAML: {exc}"}]) from exc
+
+
+def dump_yaml(config):
+    config = normalize_config(config)
+    heading = ("# GPE experiment configuration — schema 2\n"
+               "# Double precision. Lengths and times are dimensionless; a is in Bohr radii.\n"
+               "# Every stage starts at t = 0. Intervals count completed steps; 0 disables.\n"
+               "# Gaussian disorder covers the whole grid. Potential expressions use Python syntax.\n")
+    return heading + yaml.safe_dump(config, sort_keys=False, allow_unicode=True, width=100)
+
+
+def save_yaml(config, path, overwrite=False):
+    destination = Path(path).expanduser().resolve()
+    if destination.suffix.lower() not in (".yaml", ".yml"):
+        raise ValueError("Choose a filename ending in .yaml or .yml.")
+    document = dump_yaml(config)
+    with destination.open("w" if overwrite else "x", encoding="utf-8") as file:
+        file.write(document)
+    return str(destination)

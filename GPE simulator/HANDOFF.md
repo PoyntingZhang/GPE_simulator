@@ -1,5 +1,31 @@
 # GPE solver agent handoff
 
+## Diagnostics update, 9 October 2026
+
+The user explicitly requested implementation of export and monitoring, superseding
+the earlier no-export scope for these functions. `export.py` and `monitor.py` are
+now implemented; `nk_extraction.py` supplies slab-wise GPU shell histograms, and
+`helper.py` adds norm, kinetic-energy, and spectral Lz diagnostics. The confirmed
+scalar definitions are N = wavefunction norm, E = kinetic energy, L = integrated
+Lz. Intervals default to disabled. See `gpe/run.md` for signatures, file formats,
+and spectrum conventions. `colab_imaginary_benchmark.ipynb` now provides a separate
+Colab driver: 1024³ by default, 200 total steps, GPU memory preflight, warm-up and
+stage timings, periodic monitoring, and final-only wavefunction saving to Drive.
+The original script is unchanged. CUDA execution and performance measurements
+still require a GPU.
+The notebook passed schema/syntax validation and a small CPU-adapted execution
+covering the memory guard, warm-up/profile scheduling, monitoring, final-only save,
+metadata, and destination copy. Its small real-GPU check runs in Colab before the
+large allocation; no GPU benchmark has been run locally.
+Validation: 18 CPU reference/orchestration checks passed through a temporary NumPy
+adapter, including a host compilation of the shell-map C++ expression; plot previews
+were inspected. The GPU tests in `tests/test_diagnostics.py` skip locally because
+CuPy is unavailable. This does not establish CUDA compilation or GPU correctness.
+The user wants to inspect and commit changes manually; do not commit for them.
+
+The current root is the Google Drive `GPE_simulator` folder, not the old Documents
+path below. Older placeholder descriptions and undefined-L notes below are historical.
+
 Updated 9 October 2026 after inspection of the saved source and discussion of monitoring, staged experiments, and reusable states. This supersedes older sketches where they conflict. Read [FILE_PLAN.md](FILE_PLAN.md) for the current file map and future implementation milestones. [README.md](README.md) is the original physics outline and contains schematic errors; it is not an executable specification.
 
 ## Collaboration and current status

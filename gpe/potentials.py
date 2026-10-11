@@ -32,6 +32,8 @@ def get_total_static_potential(real_grid,imag_grid):
     total_potential=cp.empty(real_grid.shape,dtype=cp.complex128)
     total_potential.real[:,:,:]=real_grid
     cp.negative(imag_grid,out=total_potential.imag)
+    del real_grid
+    del imag_grid
     return total_potential
 
 def add_white_noise(

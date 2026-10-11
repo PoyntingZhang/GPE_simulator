@@ -2,6 +2,12 @@
 
 Updated 2026-10-09. This document is the practical writing order for the user and future agents. [HANDOFF.md](HANDOFF.md) records the numerical conventions, discussion, current review findings, and unresolved scientific choices. The user writes the implementation; agents review, explain, and update the requested documentation unless explicitly asked to change source code.
 
+Update: the user has now requested and received implementations of `export.py`,
+`monitor.py`, `nk_extraction.py`, and scalar helpers. Their intervals default to
+disabled. A separate `colab_imaginary_benchmark.ipynb` now drives a monitored
+imaginary-time benchmark with final-only saving. `gpe/run.md` documents the interface;
+the placeholder descriptions and future-only export scope below predate this work.
+
 The project root is `/Users/zhanghaoyu/Documents/GPE_simulator`. Python source is in its `gpe/` directory. This document, the handoff, and the existing README are in the **documentation subdirectory** `GPE simulator/`; that directory is not the Python project root.
 
 **No exports are wanted at the current stage.** Disable the existing export call while preparing the first runnable simulation. Do not enable checkpoint, spectrum, image, or final-state file writes automatically. Saving becomes an explicit opt-in feature in a later milestone.
