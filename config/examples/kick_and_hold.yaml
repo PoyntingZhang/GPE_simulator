@@ -7,7 +7,8 @@ schema_version: 2
 simulation:
   simulation_range: 70
   N_grids: 256
-  output_root: simulation_results
+  data_root: data
+  monitor_root: monitor
 stages:
 - name: Preparation
   evolution:
@@ -25,6 +26,9 @@ stages:
     dynamic:
       enabled: false
       expression: '0'
+  k_cut:
+    enabled: false
+    value: 0.0
   box:
     enabled: true
     R: 25
@@ -58,7 +62,6 @@ stages:
     scalar_interval: 50
     nk_interval: 0
     psi_interval: 0
-    checkpoint_interval: 0
     save_initial: false
     save_final: true
 - name: Bias pulse
@@ -77,6 +80,9 @@ stages:
     dynamic:
       enabled: false
       expression: '0'
+  k_cut:
+    enabled: false
+    value: 0.0
   box:
     enabled: true
     R: 25
@@ -110,7 +116,6 @@ stages:
     scalar_interval: 1000
     nk_interval: 3000
     psi_interval: 0
-    checkpoint_interval: 0
     save_initial: false
     save_final: true
 - name: Hold
@@ -129,6 +134,9 @@ stages:
     dynamic:
       enabled: false
       expression: '0'
+  k_cut:
+    enabled: false
+    value: 0.0
   box:
     enabled: true
     R: 25
@@ -162,6 +170,5 @@ stages:
     scalar_interval: 1000
     nk_interval: 3000
     psi_interval: 0
-    checkpoint_interval: 0
     save_initial: false
     save_final: true

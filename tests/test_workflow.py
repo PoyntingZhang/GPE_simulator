@@ -13,8 +13,8 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from config_editor.configuration import dump_yaml, new_config, new_stage
-from gpe.expressions import cuda_expression
+from config.yaml_parser import dump_yaml, new_config, new_stage
+from gpe.core.expressions import cuda_expression
 
 
 def norm(psi, x):
@@ -55,9 +55,9 @@ class WorkflowTests(unittest.TestCase):
         cupy.RawKernel = cupy.ReductionKernel = cupy.ElementwiseKernel = kernel
         sys.modules["cupy"] = cupy
         self.cp = cupy
-        self.parser = importlib.import_module("gpe.yaml_parser")
-        self.io = importlib.import_module("gpe.state_io")
-        self.save = importlib.import_module("gpe.save")
+        self.parser = importlib.import_module("gpe.stage_factory")
+        self.io = importlib.import_module("gpe.io.state_io")
+        self.save = importlib.import_module("gpe.io.save")
         self.launch = importlib.import_module("gpe.launch")
         self.stage_module = importlib.import_module("gpe.stage")
 
@@ -76,7 +76,7 @@ class WorkflowTests(unittest.TestCase):
     def parse(self, config):
         path = self.root / "experiment.yaml"
         path.write_text(dump_yaml(config))
-        return self.parser.parse_yaml(path)
+        return self.parser.make_stages(path)
 
     def ready_stage(self):
         item = self.parse(self.config())[0]
@@ -250,7 +250,7 @@ class WorkflowTests(unittest.TestCase):
         def normalize(psi, x):
             psi /= np.sqrt(norm(psi, x))
         with patch.object(self.stage_module, "make_real_propagator", side_effect=make_propagator) as factory, \
-             patch("gpe.initial_states.normalise", side_effect=normalize):
+             patch("gpe.core.initial_states.normalise", side_effect=normalize):
             stages[0].prepare()
             psi = self.launch.launch_stage(stages[0])
             stages[0].release()
@@ -286,7 +286,7 @@ class WorkflowTests(unittest.TestCase):
         with patch.object(sys, "argv", ["gpe.main", str(self.root / "experiment.yaml")]), \
              patch.object(self.stage_module, "make_real_propagator",
                           side_effect=lambda item: lambda current: current.psi * 0.5), \
-             patch("gpe.initial_states.normalise", side_effect=normalize), patch("builtins.print"):
+             patch("gpe.core.initial_states.normalise", side_effect=normalize), patch("builtins.print"):
             runner.main()
         files = sorted((self.root / "data").glob("*/stage_*/psi_*.npy"))
         self.assertEqual(len(files), 2)

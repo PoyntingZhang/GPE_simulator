@@ -31,7 +31,7 @@ VARIANTS = [
 
 
 def benchmark_config(n, steps, dt):
-    from config_editor.configuration import new_config, new_stage
+    from config.yaml_parser import new_config, new_stage
 
     config = new_config()
     config["simulation"].update(N_grids=n, simulation_range=70)
@@ -70,8 +70,8 @@ def measure(cp, function):
 
 
 def benchmark_stage(cp, stage, steps, warmup, repeats):
-    from .helper import get_N
-    from .initial_states import gaussian
+    from .core.helper import get_N
+    from .core.initial_states import gaussian
     from .launch import launch_stage
 
     try:
@@ -206,8 +206,8 @@ def main():
         if exc.name != "cupy":
             raise
         parser.error("Benchmarking requires CuPy and a CUDA GPU; see gpe/run.md.")
-    from config_editor.configuration import dump_yaml
-    from .yaml_parser import parse_yaml
+    from config.yaml_parser import dump_yaml
+    from .stage_factory import make_stages
 
     device = cp.cuda.Device()
     properties = cp.cuda.runtime.getDeviceProperties(device.id)
@@ -223,8 +223,8 @@ def main():
         cp.show_config()
     (folder / "cupy_config.txt").write_text(config_text.getvalue())
     root = Path(__file__).resolve().parents[1]
-    sources = [*sorted((root / "gpe").glob("*.py")),
-               root / "config_editor" / "configuration.py", root / "config_editor" / "expressions.py"]
+    sources = sorted(path for package in ("gpe", "config")
+                     for path in (root / package).rglob("*.py"))
     metadata = dict(started_utc=started.isoformat(), options=vars(args), gpu=gpu_name,
                     gpu_memory_gib=properties["totalGlobalMem"]/2**30,
                     python=platform.python_version(), platform=platform.platform(), cupy=cp.__version__,
@@ -240,7 +240,7 @@ def main():
     for n in args.grids:
         path = folder / f"config_N{n}.yaml"
         path.write_text(dump_yaml(benchmark_config(n, args.steps, args.dt)))
-        stages = parse_yaml(path)
+        stages = make_stages(path)
         rng.shuffle(stages)
         for stage in stages:
             print(f"Benchmarking {n}³ {stage.name} ...", flush=True)

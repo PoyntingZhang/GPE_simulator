@@ -5,7 +5,7 @@ import csv
 import cupy as cp
 import numpy as np
 
-from .helper import get_N, get_E, get_L, is_due, sum_abs2
+from .diagnostics import get_N, get_E, get_L, is_due, sum_abs2
 from .nk_extraction import nk_extraction
 from .state_io import save_wavefunction
 

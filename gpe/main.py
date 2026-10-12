@@ -1,7 +1,6 @@
 """Run an experiment: python -m gpe.main experiment.yaml"""
 
 import argparse
-from pathlib import Path
 
 
 def main():
@@ -9,9 +8,9 @@ def main():
     parser.add_argument("config", help="Path to the experiment YAML file")
     parser.add_argument("--check", action="store_true", help="Validate YAML settings without loading CuPy or running a simulation")
     args = parser.parse_args()
-    from config_editor.configuration import ConfigError, load_yaml
+    from config.yaml_parser import ConfigError, parse_yaml
     try:
-        config = load_yaml(Path(args.config).expanduser().read_text())
+        config = parse_yaml(args.config)
     except (OSError, ConfigError) as exc:
         parser.error(str(exc))
     if args.check:
@@ -20,12 +19,12 @@ def main():
 
     try:
         from .launch import launch_stage
-        from .yaml_parser import parse_yaml
+        from .stage_factory import make_stages
     except ModuleNotFoundError as exc:
         if exc.name == "cupy":
-            parser.error("Simulation requires CuPy and a CUDA GPU. See gpe/run.md for setup; --check works without CuPy.")
+            parser.error("Simulation requires CuPy and a CUDA GPU. Install a matching cupy-cuda12x or cupy-cuda13x build; --check works without CuPy.")
         raise
-    stages = parse_yaml(args.config)
+    stages = make_stages(args.config)
     psi = None
     for current in stages:
         print(f"Starting {current.name} ({current.type}, {current.steps} steps)", flush=True)

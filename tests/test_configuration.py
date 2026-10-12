@@ -1,11 +1,9 @@
 import copy
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from configuration import ConfigError, dump_yaml, load_yaml, new_config, new_stage, normalize_config, save_yaml
+from config.yaml_parser import ConfigError, dump_yaml, load_yaml, new_config, new_stage, normalize_config, save_yaml
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -176,7 +174,7 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), before)
 
     def test_example_is_complete_and_roundtrips(self):
-        path = Path(__file__).resolve().parents[1] / "examples" / "kick_and_hold.yaml"
+        path = Path(__file__).resolve().parents[1] / "config" / "examples" / "kick_and_hold.yaml"
         config = load_yaml(path.read_text())
         self.assertEqual(len(config["stages"]), 3)
         self.assertEqual(load_yaml(dump_yaml(config)), config)

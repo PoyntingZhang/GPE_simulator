@@ -1,4 +1,4 @@
-"""Local configuration editor. Run: python config_editor/app.py"""
+"""Local configuration editor. Run: python -m gui_periphery.editor.app"""
 
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -9,14 +9,14 @@ import threading
 from urllib.parse import urlsplit
 import webbrowser
 
-from expressions import preview_expression
+from config.expressions import preview_expression
 
 try:
-    from configuration import ConfigError, dump_yaml, load_yaml, new_config, new_stage, save_yaml
+    from config.yaml_parser import ConfigError, dump_yaml, load_yaml, new_config, new_stage, save_yaml
 except ModuleNotFoundError as exc:
     if exc.name != "yaml":
         raise
-    raise SystemExit("Install the editor dependency: python -m pip install -r config_editor/requirements.txt") from exc
+    raise SystemExit("Install the editor dependency: python -m pip install -r gui_periphery/requirements.txt") from exc
 
 
 ROOT = Path(__file__).resolve().parent
@@ -50,7 +50,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({"config": new_config(), "stage": new_stage(),
                                "save_path": str(Path.home() / "Downloads" / "experiment.yaml")})
         if route == "/api/example":
-            return self.reply({"config": load_yaml((ROOT / "examples" / "kick_and_hold.yaml").read_text())})
+            return self.reply({"config": load_yaml((ROOT.parents[1] / "config" / "examples" / "kick_and_hold.yaml").read_text())})
         files = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css"}
         if route not in files:
             return self.reply({"error": "Not found."}, 404)

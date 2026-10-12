@@ -7,9 +7,9 @@ connection after installation. All assets and data stay on the local computer.
 From the repository root:
 
 ```sh
-python3 -m venv config_editor/.venv
-config_editor/.venv/bin/python -m pip install -r config_editor/requirements.txt
-config_editor/.venv/bin/python config_editor/app.py
+python3 -m venv .venv
+.venv/bin/python -m pip install -r gui_periphery/requirements.txt
+.venv/bin/python -m gui_periphery.editor.app
 ```
 
 The last command opens `http://127.0.0.1:8765`. Stop it with Ctrl+C. Use
@@ -35,7 +35,7 @@ On Windows, the virtual environment's Python is `.venv\Scripts\python.exe`.
    is retained with the browser draft; **New** restores the default destination.
 
 A valid browser draft is restored on reopening the editor. Export YAML for a
-durable copy. `examples/kick_and_hold.yaml` can be opened as an editable illustration.
+durable copy. `config/examples/kick_and_hold.yaml` can be opened as an editable illustration.
 It is not a calibrated experiment.
 
 The revised potential format uses schema 2. Earlier schema-1 YAML files must be
@@ -50,9 +50,9 @@ the new editor starts a separate draft. Noise now always covers the whole grid.
 - Global settings live in `simulation`; `stages` is an ordered list. Missing
   optional stage fields receive editor defaults. There is no implicit inheritance
   from the preceding stage.
-- New experiment defaults are read as literals from `gpe/config.py`, without
-  importing or executing the simulation. If that file is absent, built-in defaults
-  use a 256³ grid over a range of 70.
+- New experiment defaults live in `config/defaults.py`, shared by the editor and
+  runner. Reading configuration never imports or executes the GPU solver.
+  The default grid remains 256³ over a range of 70.
 - Lengths and times are dimensionless. `cloud.a` is in Bohr radii; `cloud.N_atom`
   is the reference atom number used to calculate beta, not an instruction to
   renormalize a continued real-time state. Continued stages keep the same reference
@@ -127,7 +127,7 @@ arithmetic, including `**` to `pow`, `abs` to `fabs`, and floating-point constan
 Run an exported configuration on a CUDA machine with NumPy, PyYAML, and a matching
 CuPy installation using `python -m gpe.main experiment.yaml` from the repository
 root. Use `python -m gpe.main experiment.yaml --check` to validate YAML settings
-without CuPy. See [the runner guide](../gpe/run.md) for setup, GPU checks, output
+without CuPy. See [the runner guide](../../gpe/run.md) for setup, GPU checks, output
 formats and the stage loop.
 CSD3 submission, restart execution, and a remote monitoring viewer are not included.
 The editor's HTTP server binds
@@ -136,7 +136,8 @@ only to loopback and is intended to run on your local device, not as a public se
 ## Checks
 
 ```sh
-config_editor/.venv/bin/python -m unittest discover -s config_editor/tests -v
+.venv/bin/python -m unittest discover -s tests -p test_configuration.py -v
+.venv/bin/python -m unittest discover -s tests -p test_expressions.py -v
 ```
 
 These check formula syntax and notation, allowed variables, YAML roundtrips,

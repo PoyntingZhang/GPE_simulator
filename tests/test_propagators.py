@@ -30,9 +30,9 @@ class PropagatorTests(unittest.TestCase):
             raise unittest.SkipTest(f"CUDA is unavailable: {exc}") from exc
 
     def setUp(self):
-        from config_editor.configuration import dump_yaml, new_config
-        from gpe.yaml_parser import parse_yaml
-        self.dump_yaml, self.parse_yaml = dump_yaml, parse_yaml
+        from config.yaml_parser import dump_yaml, new_config
+        from gpe.stage_factory import make_stages
+        self.dump_yaml, self.make_stages = dump_yaml, make_stages
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -50,7 +50,7 @@ class PropagatorTests(unittest.TestCase):
     def stage(self):
         path = self.root / "test.yaml"
         path.write_text(self.dump_yaml(self.config))
-        item = self.parse_yaml(path)[0]
+        item = self.make_stages(path)[0]
         item.prepare()
         return item
 
@@ -60,7 +60,7 @@ class PropagatorTests(unittest.TestCase):
 
     def test_real_phase_for_all_potential_and_cutoff_combinations(self):
         from gpe.launch import launch_stage
-        from gpe.helper import get_N
+        from gpe.core.helper import get_N
         settings = self.config["stages"][0]
         settings["evolution"]["type"] = "real"
         settings["cloud"]["a"] = 10  # Constant density also gives an exact nonlinear phase.
@@ -84,7 +84,7 @@ class PropagatorTests(unittest.TestCase):
                         item.release()
 
     def test_generated_spatial_expressions_at_each_grid_coordinate(self):
-        from gpe.make_kernel import make_imag_spatial_kernel, make_real_spatial_kernel
+        from gpe.core.make_kernel import make_imag_spatial_kernel, make_real_spatial_kernel
         settings = self.config["stages"][0]
         # Odd side length exercises a final CUDA block with unused threads.
         self.config["simulation"]["N_grids"] = 7
@@ -130,7 +130,7 @@ class PropagatorTests(unittest.TestCase):
 
     def test_absorber_keeps_analytical_norm_loss(self):
         from gpe.launch import launch_stage
-        from gpe.helper import get_N
+        from gpe.core.helper import get_N
         self.config["stages"][0]["evolution"]["type"] = "real"
         item = self.stage()
         initial = self.plane_wave(item)
@@ -145,7 +145,7 @@ class PropagatorTests(unittest.TestCase):
 
     def test_cutoff_removes_high_mode_without_renormalizing(self):
         from gpe.launch import launch_stage
-        from gpe.helper import get_N
+        from gpe.core.helper import get_N
         settings = self.config["stages"][0]
         settings["evolution"]["type"] = "real"
         settings["k_cut"].update(enabled=True, value=1.5)
@@ -158,7 +158,7 @@ class PropagatorTests(unittest.TestCase):
         self.assertAlmostEqual(float(get_N(result, item.x_array)), 0.5, places=11)
 
     def test_snapshot_gpu_roundtrip_across_slab_boundary(self):
-        from gpe.state_io import save_wavefunction, load_wavefunction
+        from gpe.io.state_io import save_wavefunction, load_wavefunction
         self.config["simulation"]["N_grids"] = 18
         item = self.stage()
         path = self.root / "state.npy"

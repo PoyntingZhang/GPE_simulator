@@ -5,18 +5,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 
-from config_editor.configuration import load_yaml
-from .expressions import cuda_expression
-from .grids import get_grids
+from config.yaml_parser import parse_yaml as read_config
+from .core.expressions import cuda_expression
+from .core.grids import get_grids
 from .stage import stage
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def parse_yaml(path):
+def make_stages(path):
     path = Path(path).expanduser().resolve()
-    config = load_yaml(path.read_text())
+    config = read_config(path)
     simulation = config["simulation"]
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 

@@ -1,17 +1,13 @@
-"""Configuration data shared by the local editor and its YAML interface."""
+"""CPU-only YAML parsing and validation shared by the runner and local editor."""
 
-import ast
 import copy
 import math
 from pathlib import Path
 
 import yaml
 
-if __package__:
-    from .expressions import is_zero, parse_expression
-else:
-    from expressions import is_zero, parse_expression
-
+from . import defaults
+from .expressions import is_zero, parse_expression
 
 MONITOR_FIELDS = (
     "print_scalar_interval", "show_nk_interval", "show_TOF_image_interval",
@@ -23,19 +19,9 @@ SAVE_INTERVALS = ("scalar_interval", "nk_interval", "psi_interval")
 
 
 def project_defaults():
-    values = dict(N_grids=256, simulation_range=70, R=25, L=50, U_D=49,
-                  wallthickness=2, r_abs=5, A_abs=100, a=100, N_atom=150000, dt=0.01)
-    path = Path(__file__).resolve().parent.parent / "gpe" / "config.py"
-    if path.exists():
-        for node in ast.parse(path.read_text()).body:
-            if isinstance(node, ast.Assign) and len(node.targets) == 1:
-                name = getattr(node.targets[0], "id", None)
-                if name in values:
-                    try:
-                        values[name] = ast.literal_eval(node.value)
-                    except (ValueError, TypeError):
-                        pass
-    return values
+    names = ("N_grids", "simulation_range", "R", "L", "U_D", "wallthickness",
+             "r_abs", "A_abs", "a", "N_atom", "dt")
+    return {name: getattr(defaults, name) for name in names}
 
 
 def new_stage(imaginary=False):
@@ -274,3 +260,8 @@ def save_yaml(config, path, overwrite=False):
     with destination.open("w" if overwrite else "x", encoding="utf-8") as file:
         file.write(document)
     return str(destination)
+
+
+def parse_yaml(path):
+    """Read and validate a YAML file without importing the GPU solver."""
+    return load_yaml(Path(path).expanduser().read_text())

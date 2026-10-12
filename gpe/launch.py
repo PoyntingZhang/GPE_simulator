@@ -1,4 +1,4 @@
-from .save import save_outputs
+from .io.save import save_outputs
 
 
 def launch_stage(stage):

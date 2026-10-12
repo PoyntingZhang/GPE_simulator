@@ -1,5 +1,8 @@
 # Run a staged simulation
 
+For named, portable run folders and the upload/submit workflow, see
+[the repository README](../README.md) and [HPC workflow](../docs/HPC_WORKFLOW.md).
+
 From the repository root, install the shared Python dependencies:
 
 ```sh
@@ -22,18 +25,21 @@ python -m gpe.main experiment.yaml
 `--check` validates settings only; it does not load snapshots, allocate GPU arrays,
 or compile CUDA kernels. `--help` lists the CLI options.
 
-Create the YAML with `config_editor/app.py`, or adapt
-`config_editor/examples/kick_and_hold.yaml`. The example is illustrative; choose
+Create the YAML with `python -m gui_periphery.editor.app`, or adapt
+`config/examples/kick_and_hold.yaml`. The example is illustrative; choose
 its physics, grid size, timestep, and durations for your experiment.
 
-`gpe/yaml_parser.py` exposes `parse_yaml(path)`, returning the ordered list of
-stage objects. It translates validated potential expressions into CUDA syntax
+`config/yaml_parser.py` exposes `parse_yaml(path)`, returning a validated dictionary
+without importing CuPy. `gpe/stage_factory.py` exposes `make_stages(path)`, returning
+the ordered list of stage objects. It translates validated potential expressions into CUDA syntax
 and shares the one-dimensional axes. Large arrays and kernel objects are prepared
 only as each stage begins, so parsing many stages does not allocate many 3D states.
 The loop in `gpe/main.py` is:
 
 ```python
-stages = parse_yaml("experiment.yaml")
+from gpe.stage_factory import make_stages
+
+stages = make_stages("experiment.yaml")
 psi = None
 for current in stages:
     if current.initial_state["type"] != "continue":
@@ -78,11 +84,11 @@ snapshots, without forcing diagnostic output or duplicating a periodic snapshot.
 
 Monitoring files contain step, stage-local time, values and relevant axes. They
 are saved without opening plot windows. The old standalone plotting helpers in
-`gpe/monitor.py` remain available; use the separate plotting command below to
+`gpe/io/monitor.py` remain available; use the separate plotting command below to
 view diagnostics after a run.
 
 Wavefunctions are copied in slabs to avoid an extra full host-memory copy.
-`SLAB_SIZE = 16` in `gpe/state_io.py` names the number of x planes per transfer;
+`SLAB_SIZE = 16` in `gpe/io/state_io.py` names the number of x planes per transfer;
 every plane, including a shorter final slab, is saved. The
 JSON records the stage configuration, saved step/time, grid size/range and reference
 atom number. To reuse a state, set `initial_state.type: load` and `path` to its NPY
@@ -118,10 +124,25 @@ python -m gpe.plot_results "first launch/monitor" --latest --tof-limit 5
 This changes the plotted axes only; saved arrays retain the full momentum range.
 Real-space images and the radial momentum spectrum keep their existing axes.
 
-Radial spectrum plots show k from 0 to 5 by default; use `--k-max` to change the
-upper limit. The k axis is linear so it can include zero. The n(k) axis remains
-logarithmic (nonpositive samples are omitted); shell populations Nk use a linear
-vertical axis. This range selection leaves the saved spectrum arrays intact.
+Momentum spectrum n(k) plots use log-log axes with an upper k limit of 5 by
+default; use `--k-max` to change it. Zero k and nonpositive n(k) are omitted;
+the lower k limit is the first populated positive-k bin in the selected range.
+Shell populations Nk use linear axes from k=0 to the chosen upper limit.
+The saved spectrum arrays retain every bin, including k=0.
+
+To export a separate log-log PNG for every saved spectrum:
+
+```sh
+python -m gpe.plot_results "first launch/monitor" --latest --tof-limit 5 --all-spectra
+```
+
+These images are saved under `plots/<stage>/spectra/nk_XXXXXXXX.png` and included
+in `plots.zip`. Expand **Momentum spectrum history** in the HTML gallery to
+browse them. Figure rendering happens after the simulation. Sampling times come
+from the saved NPZ files: at dt=0.01, `save.nk_interval: 1000` saves every 10
+dimensionless time units. Set `monitor.show_nk_interval` to 0 or the same cadence
+to avoid additional spectrum outputs. A 100,000-step run then has 100 samples,
+at t=10, 20, ..., 1000; enabling `save_final` does not force a spectrum save.
 
 Each diagnostic uses its latest saved sample, labelled with its step and
 stage-local time. These samples may precede the final wavefunction or differ
@@ -154,7 +175,8 @@ the same step share one FFT of the completed state; Lz uses its separate slab FF
 CPU configuration and workflow tests (NumPy and PyYAML required):
 
 ```sh
-python -m unittest discover -s config_editor/tests -v
+python -m unittest discover -s tests -p test_configuration.py -v
+python -m unittest discover -s tests -p test_expressions.py -v
 python -m unittest discover -s tests -p test_workflow.py -v
 ```
 

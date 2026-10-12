@@ -11,14 +11,15 @@ try:
 except cp.cuda.runtime.CUDARuntimeError:
     pytest.skip("CUDA GPU required",allow_module_level=True)
 
-from gpe.grids import get_grids
-from gpe.helper import get_N, get_E, get_L, is_due
-from gpe.nk_extraction import nk_extraction
-from gpe.export import export
-from gpe.monitor import monitor
+from gpe.core.grids import get_grids
+from gpe.core.helper import get_N
+from gpe.io.diagnostics import get_E, get_L, is_due
+from gpe.io.nk_extraction import nk_extraction
+from gpe.io.export import export
+from gpe.io.monitor import monitor
 import importlib
 
-monitor_module=importlib.import_module("gpe.monitor")
+monitor_module=importlib.import_module("gpe.io.monitor")
 
 
 def make_state(n=8,length=2*np.pi):

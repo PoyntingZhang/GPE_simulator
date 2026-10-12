@@ -1,6 +1,44 @@
+# Local Python/editor files.
+.DS_Store
+.venv/
 __pycache__/
+.pytest_cache/
 .ipynb_checkpoints/
+
+# Simulation, benchmark, and study output trees (including their reports).
 /benchmark_results/
 /simulation_results/
+/study_results/
 /data/
 /monitor/
+/first launch/
+/runs/
+/experiments/
+/plots/
+/simulation_*/
+/saved_data/
+/monitor_data/
+/logs/
+
+# Local experiment configurations/notebooks. Keep packaged examples visible.
+/*.yaml
+/*.yml
+/*.ipynb
+/config/*.yaml
+/config/*.yml
+
+# One-off launchers and instructions tied to particular saved runs.
+/continue_relaxation.sh
+/relax_a20.sh
+/studies/run_power_law_study.sh
+/studies/POWER_LAW_STUDY.txt
+
+# Numerical outputs, snapshot metadata, logs, and result archives elsewhere.
+*.npy
+*.npz
+psi_*.json
+*.log
+*.zip
+*.zip.partial
+slurm-*.out
+slurm-*.err

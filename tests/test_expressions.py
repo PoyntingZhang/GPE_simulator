@@ -1,10 +1,8 @@
-import sys
 from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from expressions import preview_expression
+from config.expressions import preview_expression
 
 
 class ExpressionTests(unittest.TestCase):

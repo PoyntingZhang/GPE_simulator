@@ -1,7 +1,7 @@
 import cupy as cp
 import numpy as np
 import matplotlib.pyplot as plt
-from .helper import sum_abs2, get_N, get_E, get_L, is_due
+from .diagnostics import sum_abs2, get_N, get_E, get_L, is_due
 from .nk_extraction import nk_extraction
 
 

@@ -1,9 +1,9 @@
-"""Translate the editor's small expression language into CUDA arithmetic."""
+"""Translate the shared configuration expression language into CUDA arithmetic."""
 
 import ast
 import math
 
-from config_editor.expressions import parse_expression
+from config.expressions import parse_expression
 
 
 def cuda_expression(source, time_dependent=False):

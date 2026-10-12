@@ -266,7 +266,7 @@ $("#cancel-replace").onclick = () => $("#replace-dialog").close();
 $("#confirm-replace").onclick = () => { $("#replace-dialog").close(); replaceAction(); };
 $("#new-config").onclick = () => requestReplace(() => {
   rememberSavePath(defaultSavePath);
-  replaceConfig(defaults,"New experiment. Defaults are read from gpe/config.py without importing the simulator.");
+  replaceConfig(defaults,"New experiment. Defaults are read from config/defaults.py without importing the simulator.");
 });
 $("#import-config").onclick = () => $("#import-file").click();
 $("#import-file").onchange = async event => {

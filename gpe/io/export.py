@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 import cupy as cp
 import numpy as np
-from .helper import get_N, is_due
+from .diagnostics import get_N, is_due
 from .nk_extraction import nk_extraction
 
 

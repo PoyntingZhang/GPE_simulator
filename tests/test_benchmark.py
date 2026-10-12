@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from config_editor.configuration import normalize_config
+from config.yaml_parser import normalize_config
 from gpe.benchmark import VARIANTS, benchmark_config, benchmark_stage, measure, write_report
 
 
@@ -76,8 +76,8 @@ class BenchmarkTests(unittest.TestCase):
         cp = SimpleNamespace(isfinite=np.isfinite, cuda=SimpleNamespace(
             get_current_stream=lambda: SimpleNamespace(synchronize=lambda: None)))
         modules = {"gpe.launch": SimpleNamespace(launch_stage=launch),
-                   "gpe.initial_states": SimpleNamespace(gaussian=gaussian),
-                   "gpe.helper": SimpleNamespace(get_N=lambda psi, x: np.sum(np.abs(psi)**2))}
+                   "gpe.core.initial_states": SimpleNamespace(gaussian=gaussian),
+                   "gpe.core.helper": SimpleNamespace(get_N=lambda psi, x: np.sum(np.abs(psi)**2))}
         with patch.dict(sys.modules, modules), patch("gpe.benchmark.measure", fake_measure):
             row = benchmark_stage(cp, stage, steps=4, warmup=2, repeats=3)
         self.assertEqual(calls, [1, 2, 4, 4, 4])
@@ -94,8 +94,8 @@ class BenchmarkTests(unittest.TestCase):
     def test_failed_setup_releases_stage(self):
         stage = SimpleNamespace(prepare=Mock(side_effect=RuntimeError("allocation failed")), release=Mock())
         modules = {"gpe.launch": SimpleNamespace(launch_stage=Mock()),
-                   "gpe.initial_states": SimpleNamespace(gaussian=Mock()),
-                   "gpe.helper": SimpleNamespace(get_N=Mock())}
+                   "gpe.core.initial_states": SimpleNamespace(gaussian=Mock()),
+                   "gpe.core.helper": SimpleNamespace(get_N=Mock())}
         with patch.dict(sys.modules, modules), patch("gpe.benchmark.measure", lambda cp, fn: fn()):
             with self.assertRaisesRegex(RuntimeError, "allocation failed"):
                 benchmark_stage(None, stage, 4, 2, 3)
