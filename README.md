@@ -1,7 +1,36 @@
 # GPE simulator
 
-A staged, single-GPU Gross–Pitaevskii simulator. The local editor constructs YAML;
-the GPU runner reads the same configuration without needing the editor.
+A staged, single-GPU Gross–Pitaevskii simulator with one local interface for
+**Experiment → Launch → Monitor**. The GPU runner remains independent of the GUI.
+
+## Open the GUI
+
+On macOS, double-click **Open GPE.command**. On first launch it creates a local
+Python environment and installs the GUI dependencies, then opens your browser.
+Python 3 must already be installed. Keep the launcher window open while using the
+GUI; closing the browser alone does not stop it.
+
+Alternatively, after installing `gui_periphery/requirements.txt`:
+
+```bash
+python -m gui_periphery.app
+```
+
+Inside the interface:
+
+1. **Experiment:** create stages or open a YAML file. Saving YAML separately is optional.
+2. **Launch:** enter a run name and notes; choose CSD3 or this GPU machine/Colab.
+   Enter environment and scheduler settings, then click **Prepare run**.
+3. For CSD3, click **Connect**, answer OpenSSH's password/key/MFA or host-verification
+   prompts in the interface, then **Upload run**. Use **Set up environment** if needed,
+   and **Submit GPU job**. On Colab, use the existing environment and **Launch simulation**.
+4. **Monitor:** view the saved spectrum, density/TOF/phase image, scalar history and log.
+   Select saved spectra, toggle log axes, set the TOF range, and enable independent
+   timed refresh. Full wavefunctions are not transferred by monitor refresh.
+
+See [the GUI guide](docs/GUI_WORKFLOW.md) for reopening runs and the single Colab
+bootstrap cell. HPC authentication/submission and Colab GPU execution still require
+live environment checks; they are not claimed verified by local tests.
 
 ## Software layout
 
@@ -21,7 +50,12 @@ config/
   defaults.py            Defaults for new configurations
   examples/              Illustrative YAML, tracked with the software
 gui_periphery/
-  editor/                Local browser YAML editor
+  app.py                 Integrated GUI entry point
+  editor/                Browser views: Experiment, Launch, Monitor
+  workflow.py            Preparation, upload, job control, monitor sync
+  connection.py          OpenSSH authentication and connection sharing
+  viewer.py              Read existing diagnostic files for display
+  colab.py               Display the GUI in a Colab notebook cell
   prepare_run.py         Build a named, portable simulation folder
   templates/             Run, environment setup, and Slurm submission scripts
 tests/
@@ -44,7 +78,7 @@ Use Python 3.10 or newer. From the repository root:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r gui_periphery/requirements.txt
-python -m gui_periphery.editor.app
+python -m gui_periphery.app
 ```
 
 Save your file, for example as `config/my_run.yaml`. This folder now contains the
@@ -137,11 +171,17 @@ those on Colab before launching a long simulation:
 python -m unittest discover -s tests -p test_propagators.py -v
 ```
 
-The editor and run-folder preparation are implemented. The GUI's SSH/MFA login,
-upload/submit controls, and live monitor are the next phase. No SSH client or
-remote service was added by the reorganization. Monitor sampling remains specified
-by the YAML; future GUI refresh cadence will be independent. Full wavefunctions
-will stay remote unless explicitly downloaded.
+The GUI integrates preparation, OpenSSH authentication, runtime upload, environment
+setup, Slurm submission/status/cancellation and raw-data viewing. It can also launch
+on the same GPU machine where its Python service runs, including Colab. SSH support
+currently targets macOS/Linux with OpenSSH installed. No HPC daemon is installed.
+
+Local regression tests cover fake SSH/scheduler responses, HTTP session boundaries,
+authentication answer routing, portable bundles and partial diagnostic files. A
+headless browser check exercised preparation, download, spectrum/time selection,
+image/scalar controls and refresh using synthetic saved data. Actual CSD3 MFA,
+submission and Colab GPU execution remain the next integration checks. No physics
+code was modified for this GUI.
 
 Existing local `config_editor/.venv` directories are left in place; virtual
 environments are not moved because their executable paths can be absolute.

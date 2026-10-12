@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import shutil
 
-from config.yaml_parser import dump_yaml, parse_yaml
+from config.yaml_parser import dump_yaml, normalize_config, parse_yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +40,7 @@ def prepare_run(config_path, output="runs", name=None, notes="", *,
         raise ValueError("Use letters, numbers, underscores, dots, or hyphens for the run folder name.")
     if cupy_package not in ("cupy-cuda12x", "cupy-cuda13x"):
         raise ValueError("Choose cupy-cuda12x or cupy-cuda13x to match the target CUDA environment.")
-    config = parse_yaml(config_path)
+    config = normalize_config(config_path) if isinstance(config_path, dict) else parse_yaml(config_path)
     input_paths = input_paths or {}
     for index, path in input_paths.items():
         if not 1 <= index <= len(config["stages"]):

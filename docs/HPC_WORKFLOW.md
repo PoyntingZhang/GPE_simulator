@@ -1,8 +1,7 @@
 # From local YAML to a GPU job
 
-This is the command-line workflow that the future GUI will drive. The folder
-builder exists now; authentication, upload, submission, and live viewing are not
-yet connected to GUI buttons. The commands below are examples, not actions already
+This is the optional command-line equivalent of the integrated GUI. The usual
+workflow now uses the Experiment, Launch and Monitor tabs; see [GUI workflow](GUI_WORKFLOW.md). The commands below are examples, not actions already
 performed. Replace the account, username, remote directory, and environment choices
 with your own values.
 
@@ -115,9 +114,8 @@ Host login*.hpc.cam.ac.uk
 ```
 
 The initial connection still needs MFA. Later connections to the same login node
-can reuse it. The planned GUI should use the normal SSH authentication prompts and
-known-host checks, retaining neither passwords nor one-time codes in run folders
-or logs. [CSD3 MFA and connection sharing](https://docs.hpc.cam.ac.uk/hpc/user-guide/mfa.html).
+can reuse it. The GUI uses normal OpenSSH authentication prompts and known-host checks,
+retaining neither passwords nor one-time codes in run folders or logs. [CSD3 MFA and connection sharing](https://docs.hpc.cam.ac.uk/hpc/user-guide/mfa.html).
 
 For a manual preview transfer, run on your local machine:
 
@@ -129,16 +127,15 @@ rsync -av \
 ```
 
 This selects monitor data only. Full 3D wavefunctions remain under remote
-`saved_data/`. Before enabling continuous GUI refresh, publish diagnostic files
-atomically or make the reader retry incomplete files; today's writers were kept
-unchanged by the refactor. GUI refresh rate must be independent of simulation
-sampling intervals. The GUI should show the last completed sample and its time,
-plus job state, rather than treating an old sample as current progress.
+`saved_data/`. The GUI transfers changed latest diagnostics and retries incomplete files while
+retaining readable earlier samples. The writers and physics code are unchanged.
+GUI refresh rate is independent of simulation sampling intervals; plot captions
+show each sample's saved stage time separately from scheduler state.
 
 ## Colab mock run, after reviewing the refactor
 
-The mock checks the same runtime bundle, YAML, raw monitor outputs, and eventual
-local viewer. It cannot test Slurm, cluster SSH/MFA, or disconnect persistence.
+The mock checks the same runtime bundle, YAML, raw monitor outputs, and GUI
+viewer. It cannot test Slurm, cluster SSH/MFA, or disconnect persistence.
 First run the GPU tests from a copy of this branch on Colab:
 
 ```bash

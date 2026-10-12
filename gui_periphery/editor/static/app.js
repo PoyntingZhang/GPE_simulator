@@ -18,9 +18,11 @@ function set(object, path, value) {
 const fmt = value => Number.isFinite(value) ? new Intl.NumberFormat("en", {maximumFractionDigits: 5}).format(value) : "—";
 
 async function api(path, data) {
-  const response = await fetch(path, data === undefined ? {} : {
-    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)
+  const options = {headers: {"X-GPE-Session": window.GPE_SESSION}};
+  if (data !== undefined) Object.assign(options, {
+    method: "POST", headers: {...options.headers, "Content-Type": "application/json"}, body: JSON.stringify(data)
   });
+  const response = await fetch(path.replace(/^\//, ""), options);
   const result = await response.json();
   if (!response.ok && !result.errors) throw new Error(result.error || "The request could not be completed.");
   return result;

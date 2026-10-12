@@ -1,7 +1,7 @@
 # GPE configuration editor
 
 A local browser UI for creating and reopening staged simulation configurations.
-It needs Python 3.10+ and PyYAML. It does not need CuPy, a GPU, Node, or an internet
+It needs Python 3.10+, PyYAML and NumPy. It does not need CuPy, a GPU, Node, or an internet
 connection after installation. All assets and data stay on the local computer.
 
 From the repository root:
@@ -9,10 +9,10 @@ From the repository root:
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r gui_periphery/requirements.txt
-.venv/bin/python -m gui_periphery.editor.app
+.venv/bin/python -m gui_periphery.app
 ```
 
-The last command opens `http://127.0.0.1:8765`. Stop it with Ctrl+C. Use
+The last command opens a token-protected local URL on port 8765. Stop it with Ctrl+C. Use
 `--port 8766` if the port is occupied, or `--no-browser` to open the address yourself.
 On Windows, the virtual environment's Python is `.venv\Scripts\python.exe`.
 
@@ -129,7 +129,9 @@ CuPy installation using `python -m gpe.main experiment.yaml` from the repository
 root. Use `python -m gpe.main experiment.yaml --check` to validate YAML settings
 without CuPy. See [the runner guide](../../gpe/run.md) for setup, GPU checks, output
 formats and the stage loop.
-CSD3 submission, restart execution, and a remote monitoring viewer are not included.
+The integrated Launch and Monitor views provide SSH/MFA prompts, submission and
+raw-data viewing; see [GUI workflow](../../docs/GUI_WORKFLOW.md). Automatic restart
+at a saved step remains unimplemented.
 The editor's HTTP server binds
 only to loopback and is intended to run on your local device, not as a public service.
 

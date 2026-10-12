@@ -4,12 +4,17 @@ import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import mimetypes
+import hmac
 from pathlib import Path
+import secrets
+import subprocess
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 import webbrowser
 
 from config.expressions import preview_expression
+from gui_periphery.workflow import Workflow, archive_bundle
+from gui_periphery.viewer import read_monitor
 
 try:
     from config.yaml_parser import ConfigError, dump_yaml, load_yaml, new_config, new_stage, save_yaml
@@ -40,7 +45,18 @@ class Handler(BaseHTTPRequestHandler):
         port = self.server.server_port
         hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
         origin = self.headers.get("Origin")
-        return self.headers.get("Host") in hosts and (origin is None or origin in {"http://" + host for host in hosts})
+        route = urlsplit(self.path).path
+        token = self.headers.get("X-GPE-Session", "")
+        if route == "/api/ssh/askpass":
+            return self.headers.get("Host") in hosts
+        if not self.server.colab and (self.headers.get("Host") not in hosts or
+                (origin is not None and origin not in {"http://" + host for host in hosts})):
+            return False
+        if route in ("/app.js", "/style.css", "/workflow.js", "/workflow.css"):
+            return True  # Static assets contain no session or user data.
+        if route == "/":
+            token = parse_qs(urlsplit(self.path).query).get("token", [token])[0]
+        return hmac.compare_digest(token, self.server.session_token)
 
     def do_GET(self):
         if not self.local_request():
@@ -51,15 +67,42 @@ class Handler(BaseHTTPRequestHandler):
                                "save_path": str(Path.home() / "Downloads" / "experiment.yaml")})
         if route == "/api/example":
             return self.reply({"config": load_yaml((ROOT.parents[1] / "config" / "examples" / "kick_and_hold.yaml").read_text())})
-        files = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css"}
+        if route == "/api/workflow":
+            try:
+                return self.reply(self.server.workflow.state())
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                return self.reply({"error": str(exc)}, 400)
+        if route == "/api/run/download":
+            try:
+                folder = self.server.workflow.folder
+                if folder is None:
+                    raise ValueError("Prepare a run first.")
+                payload = archive_bundle(folder)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header("Content-Disposition", f'attachment; filename="{folder.name}.tar.gz"')
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            except (OSError, ValueError) as exc:
+                return self.reply({"error": str(exc)}, 400)
+        files = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css",
+                 "/workflow.js": "workflow.js", "/workflow.css": "workflow.css"}
         if route not in files:
             return self.reply({"error": "Not found."}, 404)
         path = ROOT / "static" / files[route]
         payload = path.read_bytes()
+        if route == "/":
+            payload = payload.replace(b"<!-- SESSION -->", ('<script>window.GPE_SESSION=' +
+                json.dumps(self.server.session_token) + ';</script>').encode())
         self.send_response(200)
         self.send_header("Content-Type", (mimetypes.guess_type(path)[0] or "text/plain") + "; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("Referrer-Policy", "no-referrer")
+        if not self.server.colab:
+            self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
         self.end_headers()
         self.wfile.write(payload)
 
@@ -74,6 +117,32 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(data, dict):
                 raise ValueError("Request must be an object.")
             route = urlsplit(self.path).path
+            workflow = self.server.workflow
+            if route == "/api/ssh/askpass":
+                return self.reply({"answer": workflow.connection.authenticate(self.headers.get("X-GPE-Auth"), data["prompt"])})
+            if route == "/api/ssh/answer":
+                workflow.connection.prompts.respond(data["id"], data["answer"])
+                return self.reply({"ok": True})
+            if route == "/api/monitor":
+                folder = data.get("folder") or workflow.folder
+                if not folder:
+                    raise ValueError("Prepare a run or open a monitor folder first.")
+                return self.reply(read_monitor(folder, data.get("stage", ""), data.get("spectrum", ""),
+                    data.get("image", "density_xy"), float(data.get("image_limit", 5))))
+            actions = {
+                "/api/run/prepare": ("Prepare run", lambda: workflow.prepare(data)),
+                "/api/run/open": ("Open run", lambda: workflow.open(data["folder"])),
+                "/api/ssh/connect": ("Start SSH", lambda: workflow.connection.start(data["host"], data["username"], data.get("port", 22))),
+                "/api/ssh/disconnect": ("Disconnect SSH", workflow.connection.disconnect),
+                "/api/run/upload": ("Upload run", lambda: workflow.upload(data["parent"])),
+                "/api/run/setup": ("Set up environment", workflow.setup),
+                "/api/run/submit": ("Launch simulation", workflow.submit),
+                "/api/run/refresh": ("Refresh job and monitor files", workflow.refresh),
+                "/api/run/cancel": ("Cancel job", workflow.cancel),
+            }
+            if route in actions:
+                workflow.start(*actions[route])
+                return self.reply({"ok": True})
             if route == "/api/formula":
                 if type(data.get("time_dependent", False)) is not bool:
                     raise ValueError("time_dependent must be true or false.")
@@ -95,17 +164,26 @@ class Handler(BaseHTTPRequestHandler):
             self.reply({"error": str(exc)}, 400)
 
 
+def create_server(port=8765, colab=False):
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.session_token = secrets.token_urlsafe(32)
+    server.colab = colab
+    server.workflow = Workflow(f"http://127.0.0.1:{server.server_port}")
+    return server
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Open the local GPE YAML configuration editor.")
+    parser = argparse.ArgumentParser(description="Open the GPE experiment, launch and monitor interface.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--colab", action="store_true", help="Allow a token-protected Colab proxy; use gui_periphery.colab.show()")
     args = parser.parse_args()
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+        server = create_server(args.port, args.colab)
     except OSError as exc:
         parser.exit(1, f"Could not start the editor: {exc}. Try --port 8766.\n")
-    url = f"http://127.0.0.1:{server.server_port}"
-    print(f"GPE configuration editor: {url}\nPress Ctrl+C to stop.", flush=True)
+    url = f"http://127.0.0.1:{server.server_port}/?token=" + server.session_token
+    print(f"GPE simulation workspace: {url}\nPress Ctrl+C to stop the GUI.", flush=True)
     if not args.no_browser:
         threading.Timer(0.3, lambda: webbrowser.open(url)).start()
     try:
@@ -113,6 +191,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        server.workflow.close()
         server.server_close()
 
 
