@@ -4,8 +4,9 @@ const $ = selector => document.querySelector(selector);
 const clone = value => JSON.parse(JSON.stringify(value));
 const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const draftKey = "gpe-config-editor-v2";
+const savePathKey = draftKey + "-save-path";
 const formulaTimers = new WeakMap();
-let config, defaults, stageTemplate, selected = 0, tab = "evolution", yamlText = "", revision = 0, timer, dirty = false, replaceAction;
+let config, defaults, stageTemplate, defaultSavePath, selected = 0, tab = "evolution", yamlText = "", revision = 0, timer, dirty = false, replaceAction;
 const stage = () => config.stages[selected];
 const stageName = (item, index) => item.name.trim() || `Stage ${index + 1}`;
 const get = (object, path) => path.split(".").reduce((value, key) => value[key], object);
@@ -29,6 +30,11 @@ function notice(message, error = false) {
   $("#notice").textContent = message;
   $("#notice").className = "notice" + (error ? " error" : "");
   $("#notice").hidden = false;
+}
+
+function rememberSavePath(path) {
+  $("#save-path").value = path;
+  try { localStorage.setItem(savePathKey,path); } catch (_) { /* Saving still works without browser storage. */ }
 }
 
 function field(label, path, {type = "number", unit = "", hint = "", options, min, step = "any", wide = false} = {}) {
@@ -76,10 +82,10 @@ function potentialEditor(kind) {
   const title = dynamic ? "Time dependent (t=0 at stage start)" : "Time independent";
   const variables = dynamic ? "x, y, z, t" : "x, y, z";
   return section(title, `<label class="field" for="formula-${kind}">V(${variables})
-    <textarea id="formula-${kind}" class="code" rows="2" spellcheck="false" data-path="potential.${kind}.expression" data-formula="${kind}" aria-describedby="formula-help-${kind} formula-preview-${kind}" ${locked ? "disabled" : ""}>${escapeHTML(stage().potential[kind].expression)}</textarea></label>
+    <textarea id="formula-${kind}" class="code" rows="2" spellcheck="false" data-path="potential.${kind}.expression" data-formula="${kind}" aria-describedby="formula-help-${kind} formula-preview-${kind}" ${locked || !stage().potential[kind].enabled ? "disabled" : ""}>${escapeHTML(stage().potential[kind].expression)}</textarea></label>
     <div id="formula-preview-${kind}" class="formula-preview pending" role="status" aria-live="polite">Checking formula…</div>
     <p class="formula-help" id="formula-help-${kind}">Variables: ${variables}. Constant: pi. Use + − * / ** and parentheses.<br>Functions: sin, cos, tan, exp, sqrt, tanh, abs, log. Angles in radians.<br>Put coefficients directly in the formula; entering 0 switches this contribution off.</p>
-    ${locked ? '<div class="hint">Imaginary time evolution does not accept a time dependent potential.</div>' : `<p class="potential-state" id="potential-state-${kind}">${stage().potential[kind].enabled ? "This contribution is on." : "Off. Your formula is kept; switch on to apply it."}</p>`}`,
+    ${locked ? '<div class="hint">Imaginary time evolution does not accept a time dependent potential.</div>' : `<p class="potential-state" id="potential-state-${kind}">${stage().potential[kind].enabled ? "This contribution is on." : "Off. Enable this contribution to enter a formula."}</p>`}`,
     {control:toggle(`Enable ${dynamic ? "time dependent" : "time independent"} potential`, `potential.${kind}.enabled`, locked)});
 }
 
@@ -92,16 +98,10 @@ async function checkFormula(input, commit = false) {
     if (commit && result.valid && result.is_zero && config.stages.includes(owner) &&
         owner.potential[kind].expression === source && owner.potential[kind].enabled) {
       owner.potential[kind].enabled = false;
-      if (stage() === owner) {
-        const control = $(`[data-path="potential.${kind}.enabled"]`);
-        if (control) {
-          control.checked = false;
-          control.nextElementSibling.textContent = "Off";
-        }
-        const state = $(`#potential-state-${kind}`);
-        if (state) state.textContent = "Off. Your formula is kept; switch on to apply it.";
-      }
+      owner.potential[kind].expression = "0";
+      if (stage() === owner) renderEditor();
       changed();
+      return;
     }
     if (!input.isConnected || input.value !== source) return;
     preview.className = "formula-preview " + (result.valid ? "valid" : "invalid");
@@ -123,6 +123,8 @@ function renderPotentials() {
   const s = stage(), imaginary = s.evolution.type === "imaginary";
   return '<p class="potential-intro">The two user potentials are added to the box trap and Gaussian disorder. Both can be on at the same time.</p>'
     + potentialEditor("static") + potentialEditor("dynamic")
+    + section("Momentum cutoff", s.k_cut.enabled ? `<div class="form-grid">${field("Cutoff magnitude", "k_cut.value", {min:0,unit:"k"})}</div>` : '<p class="off-message">No momentum cutoff.</p>',
+      {description:"Real time only. Remove modes with |k| above this value during each kinetic step.", control:toggle("Enable momentum cutoff","k_cut.enabled",imaginary)})
     + section("Box trap", s.box.enabled ? `<div class="form-grid">
       ${field("Radius", "box.R", {unit:"R",min:0})}${field("Length", "box.L", {unit:"L",min:0})}
       ${field("Trap depth", "box.trap_depth", {unit:"U_D",min:0})}${field("Wall thickness", "box.wall_thickness", {min:0})}
@@ -133,7 +135,7 @@ function renderPotentials() {
     + section("Gaussian disorder", s.noise.enabled ? `<div class="form-grid">
       ${field("Fraction of trap depth", "noise.fraction_of_trap_depth", {min:0})}
       ${field("Random seed", "noise.seed", {min:0,step:1})}
-      ${field("Correlation length", "noise.correlation_length", {min:0,hint:"Spatial units · 0 gives uncorrelated noise."})}
+      ${field("Correlation length", "noise.correlation_length", {min:0,hint:"Use 0 for uncorrelated noise. Correlated disorder is not implemented yet."})}
       </div><div class="derived" id="noise-amplitude">Noise σ = ${fmt(s.noise.fraction_of_trap_depth*s.box.trap_depth)}</div>
       <div class="hint">Noise covers the whole simulation region. Its strength follows this stage’s trap depth. The same seed reproduces the underlying pattern on the same grid.</div>` : '<p class="off-message">No disorder is added in this stage.</p>', {control:toggle("Enable Gaussian disorder","noise.enabled")});
 }
@@ -146,18 +148,18 @@ const intervals = [
   ["Phase slice · z = 0","show_phase_interval"]
 ];
 
-function outputFolder(s, index) {
+function outputFolder(s, index, useOverride = true) {
   const slug = s.name.trim().replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
-  return s.save.directory || `stage_${String(index+1).padStart(2,"0")}${slug ? "_"+slug : ""}`;
+  return (useOverride && s.save.directory) || `stage_${String(index+1).padStart(2,"0")}${slug ? "_"+slug : ""}`;
 }
 
 function renderOutputs() {
   return section("Monitoring intervals", `<div class="interval-grid">${intervals.map(([name,key]) => field(name, "monitor."+key,{min:0,step:1})).join("")}</div>`, {description:"Completed steps within this stage. Set 0 to disable. On CSD3, diagnostics are written for a local viewer."})
     + section("Save intervals", `<div class="form-grid">
       ${field("Scalars", "save.scalar_interval",{min:0,step:1})}${field("Momentum profiles", "save.nk_interval",{min:0,step:1})}
-      ${field("Full wavefunction", "save.psi_interval",{min:0,step:1})}${field("Restart checkpoint", "save.checkpoint_interval",{min:0,step:1})}
+      ${field("Wavefunction snapshots", "save.psi_interval",{min:0,step:1})}
       </div><div class="save-options">${check("Save initial state","save.save_initial")}${check("Save final state","save.save_final")}</div>`, {description:"Separate from monitoring. Set 0 to disable periodic saves."})
-    + section("Stage output", `<div class="form-grid">${field("Directory override", "save.directory", {type:"text",wide:true,hint:"Optional. A relative directory is placed under the HPC output root; an absolute path overrides it."})}</div><div class="hint" id="output-location"></div>`);
+    + section("Stage output", `<div class="form-grid">${field("Directory override", "save.directory", {type:"text",wide:true,hint:"Optional subfolder under both output roots. An absolute path overrides the wavefunction folder. Each run gets a new timestamped folder."})}</div><div class="hint" id="output-location"></div>`);
 }
 
 function renderStageList() {
@@ -193,7 +195,10 @@ function derived() {
   if ($("#noise-amplitude")) $("#noise-amplitude").textContent = `Noise σ = ${fmt(s.noise.fraction_of_trap_depth*s.box.trap_depth)}`;
   if ($("#output-location")) {
     const folder = outputFolder(s,selected);
-    $("#output-location").textContent = "HPC output: " + (folder.startsWith("/") || folder.startsWith("~") ? folder : config.simulation.output_root.replace(/\/$/,"")+"/"+folder);
+    const absolute = folder.startsWith("/") || folder.startsWith("~");
+    const data = absolute ? folder + "/<run>" : config.simulation.data_root.replace(/\/$/,"") + "/<run>/" + folder;
+    const monitor = config.simulation.monitor_root.replace(/\/$/,"") + "/<run>/" + (absolute ? outputFolder(s,selected,false) : folder);
+    $("#output-location").textContent = "Wavefunctions: " + data + " · Monitoring: " + monitor;
   }
 }
 
@@ -259,7 +264,10 @@ function requestReplace(action) {
 
 $("#cancel-replace").onclick = () => $("#replace-dialog").close();
 $("#confirm-replace").onclick = () => { $("#replace-dialog").close(); replaceAction(); };
-$("#new-config").onclick = () => requestReplace(() => replaceConfig(defaults,"New experiment. Defaults are read from gpe/config.py without importing the simulator."));
+$("#new-config").onclick = () => requestReplace(() => {
+  rememberSavePath(defaultSavePath);
+  replaceConfig(defaults,"New experiment. Defaults are read from gpe/config.py without importing the simulator.");
+});
 $("#import-config").onclick = () => $("#import-file").click();
 $("#import-file").onchange = async event => {
   const file = event.target.files[0];
@@ -267,7 +275,13 @@ $("#import-file").onchange = async event => {
   try {
     const result = await api("/api/import",{yaml:await file.text()});
     if (result.errors) throw new Error(result.errors.map(e=>e.message).join(" "));
-    requestReplace(() => replaceConfig(result.config,`Opened ${file.name}.`));
+    requestReplace(() => {
+      // The browser supplies a filename, not the original file's full path.
+      const path = $("#save-path").value;
+      const separator = Math.max(path.lastIndexOf("/"),path.lastIndexOf("\\"));
+      rememberSavePath(path.slice(0,separator+1) + file.name);
+      replaceConfig(result.config,`Opened ${file.name}. Check the destination folder in Save YAML before replacing a file.`);
+    });
   } catch (e) { notice(e.message,true); }
   event.target.value = "";
 };
@@ -300,7 +314,11 @@ $("#editor").addEventListener("change",event => {
   if (input.dataset.path === "evolution.type" && value === "imaginary") {
     stage().absorber.enabled = false;
     stage().potential.dynamic.enabled = false;
+    stage().potential.dynamic.expression = "0";
+    stage().k_cut.enabled = false;
   }
+  if (input.dataset.path.startsWith("potential.") && input.dataset.path.endsWith(".enabled") && !value)
+    stage().potential[input.dataset.path.split(".")[1]].expression = "0";
   renderEditor(); changed();
 });
 
@@ -331,7 +349,7 @@ document.addEventListener("click",event => {
     const parts = button.dataset.error.split(".");
     if (parts[0] === "stages" && parts.length > 2) {
       selected = Number(parts[1]);
-      tab = ["potential","box","absorber","noise"].includes(parts[2]) ? "potentials" : ["monitor","save"].includes(parts[2]) ? "outputs" : "evolution";
+      tab = ["potential","box","absorber","noise","k_cut"].includes(parts[2]) ? "potentials" : ["monitor","save"].includes(parts[2]) ? "outputs" : "evolution";
       renderEditor();
       const input = document.querySelector(`[data-path="${CSS.escape(parts.slice(2).join("."))}"]`);
       input?.focus();
@@ -355,11 +373,13 @@ $("#save-config").onclick = () => {
   $("#overwrite").checked = false;
   $("#save-dialog").showModal();
 };
+$("#save-path").addEventListener("input",event => rememberSavePath(event.target.value));
 $("#write-yaml").onclick = async () => {
   const button = $("#write-yaml"); button.disabled = true;
   try {
     const result = await api("/api/save",{config,path:$("#save-path").value,overwrite:$("#overwrite").checked});
     if (result.errors) throw new Error(result.errors.map(e=>e.message).join(" "));
+    rememberSavePath(result.path);
     $("#save-dialog").close(); dirty = false; notice(`Saved ${result.path}`);
   } catch (e) { $("#save-error").textContent = e.message; $("#save-error").hidden = false; }
   finally { button.disabled = false; }
@@ -380,13 +400,19 @@ $("#download-yaml").onclick = async () => {
 async function start() {
   try {
     const result = await api("/api/defaults"); defaults = result.config; stageTemplate = result.stage;
-    $("#save-path").value = result.save_path;
+    defaultSavePath = result.save_path;
+    $("#save-path").value = defaultSavePath;
     config = clone(defaults);
     try {
       const saved = JSON.parse(localStorage.getItem(draftKey));
       if (saved?.schema_version === 2 && saved.stages?.length) {
         const checked = await api("/api/render",{config:saved});
-        if (checked.yaml) { config = saved; dirty = true; notice("Restored your last browser draft."); }
+        if (checked.yaml) {
+          const migrated = await api("/api/import",{yaml:checked.yaml});
+          config = migrated.config;
+          $("#save-path").value = localStorage.getItem(savePathKey) || defaultSavePath;
+          dirty = true; notice("Restored your last browser draft.");
+        }
       } else if (!saved && localStorage.getItem("gpe-config-editor-v1")) {
         notice("The potential format has changed. Starting a new draft; your earlier browser draft remains stored separately.");
       }

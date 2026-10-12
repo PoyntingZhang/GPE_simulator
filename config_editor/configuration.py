@@ -7,7 +7,10 @@ from pathlib import Path
 
 import yaml
 
-from expressions import is_zero, parse_expression
+if __package__:
+    from .expressions import is_zero, parse_expression
+else:
+    from expressions import is_zero, parse_expression
 
 
 MONITOR_FIELDS = (
@@ -16,7 +19,7 @@ MONITOR_FIELDS = (
     "show_verticle_TOF_slice_interval", "show_magnifier_interval",
     "show_magnifier_slice_interval", "show_phase_interval",
 )
-SAVE_INTERVALS = ("scalar_interval", "nk_interval", "psi_interval", "checkpoint_interval")
+SAVE_INTERVALS = ("scalar_interval", "nk_interval", "psi_interval")
 
 
 def project_defaults():
@@ -47,6 +50,7 @@ def new_stage(imaginary=False):
             "static": {"enabled": False, "expression": "0"},
             "dynamic": {"enabled": False, "expression": "0"},
         },
+        "k_cut": {"enabled": False, "value": 0.0},
         "box": {"enabled": True, "R": cfg["R"], "L": cfg["L"],
                 "trap_depth": cfg["U_D"], "wall_thickness": cfg["wallthickness"]},
         "absorber": {"enabled": not imaginary, "activation_distance": cfg["r_abs"], "strength": cfg["A_abs"]},
@@ -55,7 +59,7 @@ def new_stage(imaginary=False):
         "cloud": {"a": cfg["a"], "N_atom": cfg["N_atom"]},
         "monitor": monitor,
         "save": {"directory": "", "scalar_interval": 1000, "nk_interval": 0,
-                 "psi_interval": 0, "checkpoint_interval": 0,
+                 "psi_interval": 0,
                  "save_initial": False, "save_final": True},
     }
 
@@ -66,7 +70,7 @@ def new_config():
     stage["name"] = "Preparation"
     return {"schema_version": 2,
             "simulation": {"simulation_range": cfg["simulation_range"],
-                           "N_grids": cfg["N_grids"], "output_root": "simulation_results"},
+                           "N_grids": cfg["N_grids"], "data_root": "data", "monitor_root": "monitor"},
             "stages": [stage]}
 
 
@@ -100,6 +104,15 @@ def normalize_config(raw):
 
     if not isinstance(raw, dict):
         raise ConfigError([{"path": "", "message": "Configuration must be a YAML mapping."}])
+    raw = copy.deepcopy(raw)
+    # Older schema-2 files used one output root for everything.
+    simulation = raw.get("simulation", {})
+    if isinstance(simulation, dict) and "output_root" in simulation:
+        root = simulation.pop("output_root")
+        if not isinstance(root, str) or not root.strip():
+            raise ConfigError([{"path": "simulation.output_root", "message": "Output root must be non-empty text."}])
+        simulation.setdefault("data_root", str(Path(root) / "data"))
+        simulation.setdefault("monitor_root", str(Path(root) / "monitor"))
     base = new_config()
     config = merge(raw, base, "")
     if type(config["schema_version"]) is not int or config["schema_version"] != 2:
@@ -131,7 +144,8 @@ def normalize_config(raw):
     sim = config["simulation"]
     number(sim, "N_grids", "simulation", minimum=2, integer=True)
     number(sim, "simulation_range", "simulation", positive=True)
-    text(sim, "output_root", "simulation", required=True)
+    text(sim, "data_root", "simulation", required=True)
+    text(sim, "monitor_root", "simulation", required=True)
     stages = raw.get("stages")
     if not isinstance(stages, list) or not stages:
         error("stages", "Add at least one stage.")
@@ -139,6 +153,15 @@ def normalize_config(raw):
     config["stages"] = []
     for index, raw_stage in enumerate(stages):
         path = f"stages.{index}"
+        # The old checkpoint field never had restart support. Import it as a snapshot cadence.
+        if isinstance(raw_stage, dict) and isinstance(raw_stage.get("save"), dict):
+            old_save = raw_stage["save"]
+            checkpoint_interval = old_save.pop("checkpoint_interval", 0)
+            if checkpoint_interval:
+                if old_save.get("psi_interval", 0) not in (0, checkpoint_interval):
+                    error(f"{path}.save.psi_interval", "Choose one wavefunction snapshot interval; restart checkpoints are not supported.")
+                else:
+                    old_save["psi_interval"] = checkpoint_interval
         stage = merge(raw_stage, new_stage(imaginary=index == 0), path)
         config["stages"].append(stage)
         text(stage, "name", path)
@@ -157,14 +180,22 @@ def normalize_config(raw):
             component = potential[kind]
             component_path = f"{path}.potential.{kind}"
             boolean(component, "enabled", component_path)
+            if component["enabled"] is False:
+                component["expression"] = "0"
             try:
                 expression = parse_expression(component["expression"], time_dependent=kind == "dynamic")
                 if is_zero(expression):
                     component["enabled"] = False
+                    component["expression"] = "0"
             except ValueError as exc:
                 error(f"{component_path}.expression", str(exc))
         if evo["type"] == "imaginary" and potential["dynamic"]["enabled"]:
             error(f"{path}.potential.dynamic.enabled", "Imaginary time evolution does not accept a time dependent potential.")
+        cutoff = stage["k_cut"]
+        boolean(cutoff, "enabled", f"{path}.k_cut")
+        number(cutoff, "value", f"{path}.k_cut", minimum=0, positive=cutoff["enabled"] is True)
+        if evo["type"] == "imaginary" and cutoff["enabled"]:
+            error(f"{path}.k_cut.enabled", "The momentum cutoff is available only for real time evolution.")
         for group in ("box", "absorber", "noise"):
             boolean(stage[group], "enabled", f"{path}.{group}")
         if evo["type"] == "imaginary" and stage["absorber"]["enabled"]:
@@ -179,8 +210,12 @@ def normalize_config(raw):
         number(stage["noise"], "seed", f"{path}.noise", minimum=0, integer=True)
         if stage["noise"]["enabled"] and not stage["box"]["enabled"]:
             error(f"{path}.noise.enabled", "Trap-dependent noise needs an enabled box to define its depth.")
+        if stage["noise"]["enabled"] and stage["noise"]["correlation_length"] != 0:
+            error(f"{path}.noise.correlation_length", "Correlated disorder is not implemented; use correlation_length: 0.")
         number(stage["cloud"], "a", f"{path}.cloud")
         number(stage["cloud"], "N_atom", f"{path}.cloud", positive=True, integer=True)
+        if index > 0 and initial["type"] == "continue" and stage["cloud"]["N_atom"] != config["stages"][index - 1]["cloud"]["N_atom"]:
+            error(f"{path}.cloud.N_atom", "A continued state must keep the previous stage's reference N_atom. Change a to adjust the interaction.")
         for key in MONITOR_FIELDS:
             number(stage["monitor"], key, f"{path}.monitor", minimum=0, integer=True)
         for key in SAVE_INTERVALS:

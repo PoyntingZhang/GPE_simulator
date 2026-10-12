@@ -1,0 +1,3 @@
+# Install a CuPy build matching your CUDA environment separately; see gpe/run.md.
+numpy>=1.24
+-r config_editor/requirements.txt

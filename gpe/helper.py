@@ -94,13 +94,13 @@ def normalise(psi,x_array):
 
 def norm_fft(psi,x_array,k_array):
     dx=x_array[1]-x_array[0]
-    dk=k_array[1]-k_array[0]
+    dk=abs(k_array[1]-k_array[0])
     psi_k=cp.fft.fftn(psi,norm='ortho')
     psi_k*=(dx/dk)**(3/2)
     return psi_k
 def norm_ifft(psi_k,x_array,k_array):
     dx=x_array[1]-x_array[0]
-    dk=k_array[1]-k_array[0]
+    dk=abs(k_array[1]-k_array[0])
     psi=cp.fft.ifftn(psi_k,norm='ortho')
     psi*=(dk/dx)**(3/2)
     return psi
@@ -154,4 +154,3 @@ def get_L(psi,x_array,k_array,slab_size=16):
         L-=angular_sum(slab,momentum,x_array[None,:,None])
         del momentum,slab_k
     return L*dx**3
-

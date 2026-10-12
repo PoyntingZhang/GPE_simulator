@@ -1,91 +1,232 @@
-## get configuratoin(config.yaml)
-return: all the information that we need later to launch a simulation:
-## grid(total length of simulation box edge, grid number along each direction)
-return: 
-1. real space 1D array
-2. k space 1D array
+# Run a staged simulation
 
-## box potential(box radius, box length, wall thickness, real space 1D array)
-return 
-1. the 3D real space trap potential grid cp.double64
+From the repository root, install the shared Python dependencies:
 
-## absorption potential(absorption strength, activation distance):
-return
-1. the real part of absorption potential grid cp.double64
-
-## total static potential
-return 
-1. real box potential -1j real part of absorption potential
-cp.complex 128 
-
-## time dependent potential(V(x,y,z,t))
-return V_ijk(xi,xj,xk,t) (elementwise at certain time step and perform element wise calculation)
-you could use functools import partial and call a function with some parameters fixed using partial(V,A=2,omega=3)
-
-
-## get initial psi (of using a gaussian, or load some file)
-
-if gaussian == true, we call gaussian(sigma), also need helper function (renormalise)
-or we load a already stored file(might be huge)
-
-return psi as cp.complex128
-
-## start the main simulatoin loop
-for i in range(total_steps):
-call propagations where inside propagations we use different kernels
-(these are the main things)
-if store condition is reached, we store the wavefunction
-if the display monitor condition is reached, we bring up the monitor!
-
-## Export and monitoring
-
-Call these after a complete step with `i+1`. Each interval is independent;
-`0` or `None` disables it, and iteration zero produces no output.
-
-```python
-from gpe.export import export
-from gpe.monitor import monitor
-
-export(i+1,psi,k_array,x_array,psi_interval=10000,nk_interval=1000,
-       N_interval=100,output_dir="output")
-monitor(i+1,psi,k_array,x_array,print_scalar_interval=100,
-        show_nk_interval=1000,show_TOF_image_interval=1000,
-        show_verticle_TOF_interval=1000,show_TOF_slice_interval=1000,
-        show_verticle_TOF_slice_interval=1000,show_magnifier_interval=1000,
-        show_magnifier_slice_interval=1000,show_phase_interval=1000)
+```sh
+python -m pip install -r requirements.txt
 ```
 
-- `N` is the wavefunction norm; `E` is dimensionless kinetic energy;
-  `L` is dimensionless integrated angular momentum `Lz`, without division by N.
-- `nk` is the shell average of `|phi(k)|²`, with
-  `phi=dx³ fftn(psi)/(2 pi)^(3/2)`. Shells are centered on multiples of `dk`.
-  `counts` counts grid modes, and `Nk=nk*counts*dk³` is the population per shell.
-  `sum(Nk)=N`; `Nk/bin_width` approaches `4 pi k² nk` for well-resolved full shells.
-  Outer shells intersect the Fourier cube boundary; `complete_shells` flags them.
-- Momentum images integrate over `kz` or `kx`; slices use the actual zero-frequency
-  plane. Real-space images integrate over z or use the central plane.
-- Files are `psi_XXXXXXXX.npy`, its axes/norm companion `psi_XXXXXXXX_grid.npz`,
-  `nk_XXXXXXXX.npz`, and an appended `N.csv`. Wavefunctions are saved in slabs.
-  These are snapshots, not complete trajectory restarts. Reusing an output directory
-  and iteration overwrites that snapshot and appends another N row.
-- Both functions accept optional `psi_k=cp.fft.fftn(psi)` to share a transform
-  when needed at the same iteration. Supply the completed state's transform,
-  not the intermediate transform inside propagation. No transform is cached
-  between calls. `Lz` uses separate 2D transforms in z slabs.
+For simulation, also install a CuPy build matching the GPU machine's CUDA setup.
+For example, with an existing CUDA 12.x toolkit, use `python -m pip install cupy-cuda12x`.
+Choose the appropriate package and Python version using the
+[CuPy installation guide](https://docs.cupy.dev/en/stable/install.html).
+The local editor and YAML validation also work on machines without CUDA.
 
-On a CUDA machine with CuPy, NumPy, Matplotlib, and pytest installed:
-`python -m pytest -q tests/test_diagnostics.py`.
+Validate YAML settings, then run on the GPU machine:
 
-## Colab benchmark
+```sh
+python -m gpe.main experiment.yaml --check
+python -m gpe.main experiment.yaml
+```
 
-Open `colab_imaginary_benchmark.ipynb` from the project root in Colab and select a
-GPU runtime. It copies `MyDrive/GPE_simulator/gpe` to the runtime, so the source
-does not need to be pushed to GitHub first. Default settings are 1024³, 200 total
-imaginary-time steps, 5 warm-up steps, 5 profiled steps, scalars every 50 steps,
-and plots every 200 steps. Warm-up and profiled steps are part of the evolution.
+`--check` validates settings only; it does not load snapshots, allocate GPU arrays,
+or compile CUDA kernels. `--help` lists the CLI options.
 
-The notebook checks the GPU memory before allocation: the main arrays need 56 GiB
-at 1024³, plus FFT workspace. It does not automatically reduce the grid size.
-Only the final wavefunction is exported, as `psi_final.npy`, along with its grid,
-benchmark timings, scalar history, and run metadata. Results are copied to
-`MyDrive/GPE_simulator/benchmark_results/<run_id>`. A 1024³ final state is 16 GiB.
+Create the YAML with `config_editor/app.py`, or adapt
+`config_editor/examples/kick_and_hold.yaml`. The example is illustrative; choose
+its physics, grid size, timestep, and durations for your experiment.
+
+`gpe/yaml_parser.py` exposes `parse_yaml(path)`, returning the ordered list of
+stage objects. It translates validated potential expressions into CUDA syntax
+and shares the one-dimensional axes. Large arrays and kernel objects are prepared
+only as each stage begins, so parsing many stages does not allocate many 3D states.
+The loop in `gpe/main.py` is:
+
+```python
+stages = parse_yaml("experiment.yaml")
+psi = None
+for current in stages:
+    if current.initial_state["type"] != "continue":
+        psi = None
+    current.prepare(psi)
+    psi = None  # Release the caller's reference to the stage's initial array.
+    psi = launch_stage(current)
+    current.release()  # Drop stage-owned arrays and kernels; keep returned psi.
+```
+
+A Gaussian is normalized on creation. `continue` takes the preceding wavefunction
+directly; `load` reads a complex128 NPY cube. Neither renormalizes the state.
+Imaginary propagation normalizes after each step. Real propagation retains losses.
+Continued stages must keep the same reference `N_atom`; change `a` to adjust the
+interaction. A generated state may use a different reference atom number.
+Every stage starts at t=0, including a stage loaded from a snapshot. Dynamic
+potentials use the existing midpoint-time propagator. Only uncorrelated disorder
+(`correlation_length: 0`) is currently supported.
+
+## Output folders and intervals
+
+Defaults are `data/<run>/stage_01_Name/` for wavefunctions and
+`monitor/<run>/stage_01_Name/` for diagnostics, beside `gpe`. The same timestamp
+identifies all stages of one run. Relative output roots are relative to the
+repository root. `save.directory` optionally changes a stage's subfolder in both
+roots; an absolute override writes wavefunctions under `<override>/<run>` and
+keeps monitoring under its normal root. Duplicate stage output folders are rejected.
+Relative overrides must remain inside the timestamped run folder.
+Folders are created when first used.
+
+All intervals count completed steps within each stage; zero disables. Schedules
+are independent. `save_initial` and `save_final` additionally request wavefunction
+snapshots, without forcing diagnostic output or duplicating a periodic snapshot.
+
+| Setting | Output |
+| --- | --- |
+| `save.psi_interval`, `save_initial`, `save_final` | `psi_XXXXXXXX.npy`, matching JSON metadata, and shared `grid.npz` in the data folder |
+| `save.scalar_interval` | Append `step,time,norm,N_atoms,E_kin,Lz` to `scalars.csv` in the monitor folder |
+| `monitor.print_scalar_interval` | Print step, stage time, norm, kinetic energy and Lz |
+| `save.nk_interval` or `monitor.show_nk_interval` | `nk_XXXXXXXX.npz` |
+| Other `monitor.show_*_interval` settings | TOF projections/slices, density projections/slices, or phase as small NPZ arrays |
+
+Monitoring files contain step, stage-local time, values and relevant axes. They
+are saved without opening plot windows. The old standalone plotting helpers in
+`gpe/monitor.py` remain available; use the separate plotting command below to
+view diagnostics after a run.
+
+Wavefunctions are copied in slabs to avoid an extra full host-memory copy.
+`SLAB_SIZE = 16` in `gpe/state_io.py` names the number of x planes per transfer;
+every plane, including a shorter final slab, is saved. The
+JSON records the stage configuration, saved step/time, grid size/range and reference
+atom number. To reuse a state, set `initial_state.type: load` and `path` to its NPY
+file; relative paths resolve against the YAML file's folder. Keep the JSON and
+`grid.npz` alongside it for consistency checks. Older `<snapshot>_grid.npz`
+companions are also recognized. Bare NPY files can be loaded, but
+only their shape and dtype can be checked. Loading never interpolates or rescales.
+These are snapshots: the recorded step/time are informational, not restart state.
+
+## View saved diagnostics
+
+Generate plots after a run, on either the GPU machine or a CPU-only computer:
+
+```sh
+python -m pip install matplotlib
+python -m gpe.plot_results "first launch/monitor" --latest
+```
+
+Replace the path with your monitor root. Alternatively pass one timestamped run
+folder and omit `--latest`. The command prints which run it selected and creates
+`plots/` inside that run: each stage gets scalar-history and diagnostic PNGs when
+the corresponding files exist. It also creates `plots/index.html` and a
+`plots.zip` containing the complete gallery. Download and extract the ZIP, then
+open `index.html` in a browser, or open individual PNGs in Colab's Files panel.
+No CuPy, GPU, wavefunction transfer or simulation rerun is needed for these plots.
+
+To zoom all TOF images and slices to dimensionless momentum [-5, 5] on both axes:
+
+```sh
+python -m gpe.plot_results "first launch/monitor" --latest --tof-limit 5
+```
+
+This changes the plotted axes only; saved arrays retain the full momentum range.
+Real-space images and the radial momentum spectrum keep their existing axes.
+
+Radial spectrum plots show k from 0 to 5 by default; use `--k-max` to change the
+upper limit. The k axis is linear so it can include zero. The n(k) axis remains
+logarithmic (nonpositive samples are omitted); shell populations Nk use a linear
+vertical axis. This range selection leaves the saved spectrum arrays intact.
+
+Each diagnostic uses its latest saved sample, labelled with its step and
+stage-local time. These samples may precede the final wavefunction or differ
+between quantities. Stages with image monitoring disabled have no diagnostic
+image plot; their saved scalar history is still plotted. Image color scales are
+independent across panels; phase uses [-pi, pi], and masked phase remains blank.
+Incomplete outer momentum shells are distinguished in the spectrum plot.
+Rerunning the plotting command replaces the generated plots, leaving numerical
+simulation outputs intact.
+
+## Diagnostic conventions
+
+`norm` is the wavefunction norm, and `N_atoms = cloud.N_atom * norm`. `E_kin` is
+integrated dimensionless kinetic energy, and `Lz` is integrated angular momentum;
+neither is divided by norm. The reference atom number is not the remaining count.
+
+`nk` is the shell average of `|phi(k)|²`, where
+`phi = dx³ fftn(psi)/(2 pi)^(3/2)`. Spectra retain mode `counts`, bin `edges`, shell
+populations `Nk`, and `complete_shells`. `sum(Nk)` equals norm. Outer shells
+intersect the Fourier cube boundary and are marked incomplete.
+
+TOF arrays integrate over kz or kx, or use the actual zero-frequency plane.
+Density arrays integrate over z or use index `N_grids//2`; that plane is z=0 for
+even grids, and the saved z coordinate identifies it for odd grids. Phase is NaN
+where density is at most 1e-12 of the slice maximum. Momentum diagnostics due at
+the same step share one FFT of the completed state; Lz uses its separate slab FFTs.
+
+## Checks
+
+CPU configuration and workflow tests (NumPy and PyYAML required):
+
+```sh
+python -m unittest discover -s config_editor/tests -v
+python -m unittest discover -s tests -p test_workflow.py -v
+```
+
+The workflow tests substitute NumPy arrays and mocked GPU kernels; they check
+configuration, scheduling and file I/O, not CUDA execution or numerical accuracy.
+Before a full simulation, run the small analytical GPU checks:
+
+```sh
+python -m unittest discover -s tests -p test_propagators.py -v
+```
+
+These exercise the generated spatial formulas, real-time phase (with static and
+dynamic potentials and cutoff), imaginary-time decay and normalization, absorber
+loss, cutoff loss, GPU snapshot roundtrips, and a two-stage run with saved diagnostics.
+A skipped result means no GPU
+verification occurred. Passing these checks does not establish convergence for
+a particular nonlinear experiment; choose its timestep and grid accordingly.
+
+On a CUDA machine with CuPy, NumPy, Matplotlib and pytest installed, the existing
+diagnostic tests can also be run with `python -m pytest -q tests/test_diagnostics.py`.
+
+## Benchmark the propagator variants
+
+From the repository root on a CUDA machine:
+
+```sh
+python -u -m gpe.benchmark --grids 64 128 256 --steps 50 --warmup 5 --repeats 3
+```
+
+This compares ten cases: imaginary time with/without a static external potential,
+and all eight real-time combinations of static potential, dynamic potential and
+momentum cutoff. It calls the existing `launch_stage` loop with every diagnostic
+and snapshot disabled. The propagators are unchanged. Each repeat starts from the
+same Gaussian and stage time zero. The benchmark uses complex128, nonzero
+interactions, and specified representative potential expressions; box, absorber
+and disorder are off. The generated YAML files record every setting.
+The Gaussian is regenerated outside the timer before each repeat, after releasing
+the old state; no extra full GPU copy is retained for resets.
+
+The primary result is synchronized wall time per step, with median and min/max
+over repeated batches; CUDA-event timings are also recorded. Setup and the first
+step are reported separately. Those initial timings share existing CuPy caches
+and are not controlled cold-start measurements. Cases are shuffled using `--seed`
+(default 42). FFT plans and unused memory pools are cleared between grid sizes.
+Other workloads on the GPU can affect the measurements, so run the benchmark
+without a simultaneous simulation. See the
+[CuPy timing guidance](https://docs.cupy.dev/en/stable/user_guide/performance.html).
+
+Reports are written after each completed case to a new
+`benchmark_results/<UTC timestamp>/` folder (override the parent with `--output`):
+`report.md` for reading, `summary.csv` for analysis, `results.json` for individual
+repeat timings, hardware details, execution order and source hashes, and
+`cupy_config.txt` for CUDA library versions. No wavefunctions are saved.
+The report marks partial results if execution stops before all cases finish.
+
+A short check of the benchmark itself can use
+`--grids 8 --steps 2 --warmup 1 --repeats 2`; these tiny grids are not representative
+performance measurements. CPU tests of the benchmark's configuration, timing
+boundaries and reporting run with:
+
+```sh
+python -m unittest discover -s tests -p test_benchmark.py -v
+```
+
+For a 1024³ trial on an otherwise idle 80 GB A100, start with:
+
+```sh
+python -u -m gpe.benchmark --grids 1024 --steps 10 --warmup 3 --repeats 3
+```
+
+Each complex128 cube is 16 GiB. The current real-time propagator can retain four
+such arrays simultaneously (input, potential, Fourier state and inverse-FFT
+output), before FFT workspace and other allocations. A 40 GB GPU cannot hold
+this workload. Actual fit on 80 GB depends on available memory and FFT workspace;
+the command is a trial, not a guarantee. It writes a separate timestamped report.

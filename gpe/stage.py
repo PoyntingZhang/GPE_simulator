@@ -2,6 +2,8 @@ import cupy as cp
 from .potentials import *
 from .helper import *
 from .make_propagator import *
+from .initial_states import gaussian
+from .state_io import load_wavefunction
 
 
 
@@ -33,14 +35,7 @@ class stage:
         self.steps=steps
         self.dt=dt
         self.initial_state=initial_state
-        self.psi=self._get_initial_state()
         self.box_params=box_params
-        if self.type=="imaginary":
-            self.staticV=self._get_box()
-        elif self.type=="real":
-            self.staticV=get_total_static_potential(self._get_box(),self._get_absorber())  
-        if noise_params["activate"]==True:
-            add_white_noise(N_grids,self.box_params["trap_depth"],self.noise_params["fraction"],self.staticV,noise_params["seed"])
         
         self.a=cloud_params["a"]
         self.N_atoms=cloud_params["N_atom"]
@@ -49,41 +44,44 @@ class stage:
         self.potential_params=potential_params
         self.beta=get_beta(self.N_atoms,self.a)
         self.k_cut_params=k_cut_params
-        
-        
+        self.psi=None
+        self.staticV=None
+        self.propagator=None
+        self.name=""
+        self.config={}
+
+    def prepare(self, previous_psi=None):
+        """Allocate the large arrays only when this stage is about to run."""
+        self.psi=self._get_initial_state(previous_psi)
+        if self.type=="imaginary":
+            self.staticV=self._get_box()
+        else:
+            self.staticV=get_total_static_potential(self._get_box(),self._get_absorber())
+        if self.noise_params["activate"]:
+            add_white_noise(self.N_grids,self.box_params["trap_depth"],
+                            self.noise_params["fraction"],self.staticV,self.noise_params["seed"])
         if self.type=="real":
             self.propagator=make_real_propagator(self)
         else:
             self.propagator=make_imag_propagator(self)
 
+    def release(self):
+        """The runner keeps the returned psi; this configuration keeps no 3D arrays."""
+        self.psi=None
+        self.staticV=None
+        self.propagator=None
 
-
-            
-
-        
-            
-
-            
-
-    
-
-        
-
-        
-
-            
-
-
-
-
-    def _get_initial_state(self):
-        if self.initial_state=="continue":
-            pass
-        elif self.initial_state=="load":
-            pass
-        elif self.initial_state=="generate":
-            pass
-        # return the pointer to the complex128 wave function
+    def _get_initial_state(self, previous_psi):
+        kind=self.initial_state["type"]
+        if kind=="continue":
+            if previous_psi is None:
+                raise ValueError("A continue stage needs the preceding stage's wavefunction.")
+            return previous_psi
+        if kind=="load":
+            return load_wavefunction(self.initial_state["path"],self)
+        if kind=="gaussian":
+            return gaussian(self.x_array,self.initial_state["sigma"])
+        raise ValueError(f"Unknown initial state: {kind}")
     def _get_box(self):
         if self.box_params["activate"]==False:
             return cp.zeros((self.N_grids,self.N_grids,self.N_grids),dtype=cp.float64)
@@ -106,8 +104,3 @@ class stage:
             return absorber # this is a real array
         else:
             return cp.zeros((self.N_grids,self.N_grids,self.N_grids),dtype=cp.float64)
-
-
-    
-
-    

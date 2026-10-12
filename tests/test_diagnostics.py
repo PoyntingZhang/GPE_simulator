@@ -49,13 +49,13 @@ def test_vortex_angular_momentum(charge):
     assert L==pytest.approx(charge*N,rel=1e-9,abs=1e-10)
 
 
-@pytest.mark.parametrize("n",[7,8,18])
+@pytest.mark.parametrize("n",[2,7,8,18])
 def test_shells_and_parseval(n):
     psi,x,k=make_state(n)
     F=cp.fft.fftn(psi)
     spectrum={key:cp.asnumpy(value) for key,value in nk_extraction(F,x,k,slab_size=3).items()}
     dx=float(x[1]-x[0])
-    dk=float(k[1]-k[0])
+    dk=abs(float(k[1]-k[0]))
     radius=np.sqrt(sum(axis**2 for axis in np.meshgrid(cp.asnumpy(k),cp.asnumpy(k),
                                                      cp.asnumpy(k),indexing="ij")))
     bins=np.floor(radius/dk+0.5).astype(int)

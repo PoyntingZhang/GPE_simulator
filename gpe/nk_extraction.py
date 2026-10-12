@@ -17,7 +17,7 @@ def nk_extraction(psi_k,x_array,k_array,slab_size=16):
     """Shell averages from raw fftn(psi); Nk sums to the wavefunction norm."""
     N_grid=psi_k.shape[0]
     dx=float(x_array[1]-x_array[0])
-    dk=float(k_array[1]-k_array[0])
+    dk=abs(float(k_array[1]-k_array[0]))
     nbins=int(math.floor(math.sqrt(3)*(N_grid//2)+0.5))+1
     counts=cp.zeros(nbins,dtype=cp.int64)
     occupation=cp.zeros(nbins,dtype=cp.float64)

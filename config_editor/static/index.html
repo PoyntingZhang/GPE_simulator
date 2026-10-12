@@ -27,7 +27,8 @@
       <div class="global-title"><span class="section-number">01</span><div><h2>Simulation space</h2><p>Shared across all stages</p></div></div>
       <label class="field">Simulation range <span class="unit">dimensionless</span><input id="simulation-range" data-global="simulation_range" type="number" min="0" step="any"></label>
       <label class="field">Grid size <span class="unit">per axis</span><div class="input-suffix"><input id="grid-size" data-global="N_grids" type="number" min="2" step="1"><span>³</span></div></label>
-      <label class="field output-field">Output root <span class="unit">on HPC</span><input id="output-root" data-global="output_root" type="text" spellcheck="false"></label>
+      <label class="field output-field">Wavefunction folder <span class="unit">on HPC</span><input id="data-root" data-global="data_root" type="text" spellcheck="false"></label>
+      <label class="field output-field">Monitoring folder <span class="unit">on HPC</span><input id="monitor-root" data-global="monitor_root" type="text" spellcheck="false"></label>
     </section>
     <div class="workspace" id="workspace">
       <aside class="sequence-panel">
@@ -53,13 +54,14 @@
     </div>
     <section id="validation" class="validation" aria-label="Configuration issues" hidden></section>
     <footer><div class="status"><span id="status-dot"></span><span id="validation-status">Loading configuration…</span></div><button id="toggle-preview" class="text-button" aria-expanded="false">Show YAML preview <span aria-hidden="true">{ }</span></button></footer>
-    <p class="scope-note">Configuration editor · The staged simulation runner is the next component; this tool does not submit or run a simulation.</p>
+    <p class="scope-note">Configuration editor · Export YAML here, then run it on your GPU system with python -m gpe.main experiment.yaml.</p>
   </main>
   <dialog id="save-dialog">
     <form method="dialog"><button class="close-dialog" aria-label="Close save dialog">×</button></form>
     <div class="eyebrow">READY TO TAKE WITH YOU</div><h2>Save your configuration</h2><p>This saves a YAML file on this computer. Copy it to CSD3 when you are ready.</p>
-    <label class="field">Local file path<input id="save-path" type="text" spellcheck="false" placeholder="~/Downloads/experiment.yaml"></label>
-    <label class="check-line"><input id="overwrite" type="checkbox"> Replace existing file</label>
+    <label class="field">Local file path<input id="save-path" type="text" spellcheck="false" placeholder="~/Downloads/experiment.yaml" aria-describedby="save-path-help"></label>
+    <p id="save-path-help">Check the full destination path, including the folder. Replace existing file applies to this path. Download instead uses your browser's download folder.</p>
+    <label class="check-line"><input id="overwrite" type="checkbox"> Replace existing file at this path</label>
     <div id="save-error" class="inline-error" role="alert" hidden></div>
     <div class="dialog-actions"><button id="download-yaml" class="secondary">Download instead</button><button id="write-yaml" class="primary">Save file</button></div>
   </dialog>

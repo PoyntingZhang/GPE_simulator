@@ -45,7 +45,7 @@ def monitor(i,psi,k_array,x_array,print_scalar_interval=0,show_nk_interval=0,
         return {}
     results={}
     dx=float(x_array[1]-x_array[0])
-    dk=float(k_array[1]-k_array[0])
+    dk=abs(float(k_array[1]-k_array[0]))
     if momentum_due and psi_k is None:
         psi_k=cp.fft.fftn(psi)
     if scalars:

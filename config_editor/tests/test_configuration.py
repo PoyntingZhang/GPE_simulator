@@ -54,6 +54,22 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "Trap-dependent noise needs"):
             normalize_config(config)
 
+    def test_correlated_noise_is_rejected_before_running(self):
+        config = new_config()
+        config["stages"][0]["noise"].update(enabled=True, correlation_length=1)
+        with self.assertRaisesRegex(ConfigError, "Correlated disorder is not implemented"):
+            normalize_config(config)
+
+    def test_continued_state_keeps_reference_atom_number(self):
+        config = new_config()
+        second = new_stage()
+        second["cloud"]["N_atom"] += 1
+        config["stages"].append(second)
+        with self.assertRaisesRegex(ConfigError, "reference N_atom"):
+            normalize_config(config)
+        second["initial_state"]["type"] = "gaussian"
+        normalize_config(config)  # A newly generated cloud can use a new reference.
+
     def test_missing_load_path_and_invalid_numbers(self):
         config = new_config()
         config["stages"][0]["initial_state"]["type"] = "load"
@@ -76,13 +92,14 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "does not accept an absorber"):
             load_yaml("schema_version: 2\nstages: [{absorber: {enabled: true}}]")
 
-    def test_zero_disables_potential_and_disabled_formulas_are_retained(self):
+    def test_zero_disables_potential_and_disabled_formulas_are_cleared(self):
         config = new_config()
         config["stages"][0]["potential"]["static"].update(enabled=True, expression="(-0.0)")
         result = normalize_config(config)
         self.assertFalse(result["stages"][0]["potential"]["static"]["enabled"])
         config["stages"][0]["potential"]["static"].update(enabled=False, expression="0.03*y")
-        self.assertEqual(load_yaml(dump_yaml(config)), config)
+        self.assertEqual(load_yaml(dump_yaml(config))["stages"][0]["potential"]["static"],
+                         {"enabled": False, "expression": "0"})
 
     def test_invalid_formulas_cannot_be_exported_or_imported(self):
         for formula in ("A*y", "t*x", "sin(", "__import__('os')"):
@@ -92,7 +109,28 @@ class ConfigurationTests(unittest.TestCase):
                 dump_yaml(config)
             self.assertEqual(result.exception.errors[0]["path"], "stages.0.potential.static.expression")
         with self.assertRaisesRegex(ConfigError, "Unrecognised variable A"):
-            load_yaml('schema_version: 2\nstages: [{potential: {dynamic: {expression: "A*y"}}}]')
+            load_yaml('schema_version: 2\nstages: [{potential: {dynamic: {enabled: true, expression: "A*y"}}}]')
+
+    def test_legacy_output_root_and_checkpoint_import_as_snapshots(self):
+        result = load_yaml("schema_version: 2\nsimulation: {output_root: results}\n"
+                           "stages: [{save: {checkpoint_interval: 50}}]")
+        self.assertEqual(result["simulation"]["data_root"], "results/data")
+        self.assertEqual(result["simulation"]["monitor_root"], "results/monitor")
+        self.assertEqual(result["stages"][0]["save"]["psi_interval"], 50)
+        self.assertNotIn("checkpoint_interval", result["stages"][0]["save"])
+        with self.assertRaisesRegex(ConfigError, "Choose one wavefunction snapshot interval"):
+            load_yaml("schema_version: 2\nstages: [{save: {checkpoint_interval: 50, psi_interval: 20}}]")
+
+    def test_cutoff_is_positive_and_real_time_only(self):
+        config = new_config()
+        config["stages"][0]["k_cut"].update(enabled=True, value=2)
+        with self.assertRaisesRegex(ConfigError, "only for real time"):
+            normalize_config(config)
+        config["stages"][0]["evolution"]["type"] = "real"
+        self.assertEqual(load_yaml(dump_yaml(config)), config)
+        config["stages"][0]["k_cut"]["value"] = 0
+        with self.assertRaisesRegex(ConfigError, "positive"):
+            normalize_config(config)
 
     def test_old_format_and_noise_region_are_not_silently_accepted(self):
         with self.assertRaisesRegex(ConfigError, "schema_version: 2"):
