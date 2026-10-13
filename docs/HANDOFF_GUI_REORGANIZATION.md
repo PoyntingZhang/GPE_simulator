@@ -1,6 +1,7 @@
 # Software handoff: GUI reorganization
 
 Date: 2026-10-12. Branch: `gui-implementation`.
+Updated 2026-10-13 to remove experiment-specific power-law study tooling.
 
 This supplements the original files now under [history/](history/), formerly
 `GPE simulator/`; those handoffs were
@@ -10,7 +11,7 @@ not overwritten. They describe earlier layouts and investigation history.
 
 - `gpe/core/`: evolution, grids, potentials, CUDA kernels and normalization.
 - `gpe/io/`: snapshot loading/saving, spectra, scalar diagnostics, legacy output
-  APIs, plotting and study analysis. `nk_extraction.py` is here by explicit request.
+  APIs and plotting. `nk_extraction.py` is here by explicit request.
 - `config/`: parser, schema validation, defaults and expression language shared
   by the runner and GUI. No CuPy or GUI imports.
 - `gpe/stage_factory.py`: `make_stages(path)` creates the ordered stage objects;
@@ -20,8 +21,7 @@ not overwritten. They describe earlier layouts and investigation history.
   not open an SSH connection, upload anything, or launch a simulation.
 
 Runtime entry points remain `python -m gpe.main`, `python -m gpe.benchmark`,
-`python -m gpe.power_law_study`, `python -m gpe.plot_results`, and
-`python -m gpe.analyze_power_law`. Internal imports use the new locations; no broad
+and `python -m gpe.plot_results`. Internal imports use the new locations; no broad
 compatibility layer was added for historical notebooks.
 
 ## Physics constraint
@@ -40,9 +40,11 @@ YAML endpoints passed a localhost smoke check; all shell templates passed `bash 
 CUDA execution still needs the Colab GPU test pass; there is no
 local CUDA device on the development machine.
 
-Pre-existing uncommitted study/analysis software, plot improvements, ignore rules,
-the illustrative example, and `HANDOFF_3.md` are included in this branch. They are
-not new physics changes made by the reorganization. Specific run YAML, wavefunctions,
+The reorganization originally included experiment-specific power-law study software.
+Its launcher, dedicated analysis/diagnostics and tests were removed on 2026-10-13;
+they remain recoverable from Git history. General plotting, spectrum extraction,
+ignore rules, the illustrative example and historical handoffs remain included.
+These are not new physics changes. Specific run YAML, wavefunctions,
 monitor outputs, plots, logs, study result archives and notebooks remain excluded
 from new commits by `.gitignore`.
 
@@ -62,7 +64,7 @@ packages. It is never run automatically during folder preparation. After manual
 edits, the original `run.json` hashes describe the prepared files, not the edited
 files; retain the edited environment files with the results for reproducibility.
 
-Benchmark hashing and study source archives now recurse into `gpe/core`, `gpe/io`
+Benchmark hashing recurses into `gpe/core`, `gpe/io`
 and `config`; otherwise relocated kernels would have disappeared from provenance.
 
 ## Next phase

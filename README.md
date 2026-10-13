@@ -40,13 +40,12 @@ remote monitoring remain unverified while the job waits in the queue.
 ```text
 gpe/
   core/                  Evolution, potentials, grids, normalization, CUDA kernels
-  io/                    Snapshots, numerical diagnostics (including n(k)), analysis
+  io/                    Snapshots, numerical diagnostics (including n(k)), plotting
   main.py                Command-line entry point
   stage.py               Stage configuration and preparation
   stage_factory.py       Turn validated YAML into GPU stage objects
   launch.py              Evolution loop and output scheduling
   benchmark.py           Propagator timing tool
-  power_law_study.py      Controlled study orchestration
 config/
   yaml_parser.py         CPU-only parsing, defaults merging, validation, YAML export
   expressions.py         Shared expression validation and preview
@@ -69,9 +68,9 @@ The physics functions and CUDA kernels were preserved during this reorganization
 Normalization stays in `core/` because imaginary-time propagation uses it.
 
 `config` imports neither the GUI nor CuPy. Both the editor and runtime import
-`config`. Only the stage factory and solver need a GPU. `gpe/plot_results.py` and
-`gpe/analyze_power_law.py` are small entry points preserving the existing commands;
-their implementations live in `gpe/io/`.
+`config`. Only the stage factory and solver need a GPU. `gpe/plot_results.py` is a
+small entry point preserving the plotting command; its implementation lives in
+`gpe/io/`.
 
 ## Create a YAML locally
 
