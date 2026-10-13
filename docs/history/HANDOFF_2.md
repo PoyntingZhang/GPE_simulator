@@ -13,8 +13,8 @@ conflict, this continuation records the later decisions. The user's current
 instructions and the actual source take precedence over either document.
 
 [FILE_PLAN.md](FILE_PLAN.md) also contains historical milestones; it is not an
-up-to-date list of unfinished work. [The editor README](../config_editor/README.md)
-documents the current YAML interface. [gpe/run.md](../gpe/run.md) documents the
+up-to-date list of unfinished work. [The editor README](../../gui_periphery/editor/README.md)
+documents the current YAML interface. [gpe/run.md](../../gpe/run.md) documents the
 diagnostic interface, but all callers should be checked against current signatures.
 
 | Earlier statement | Current position |
@@ -229,7 +229,7 @@ reading small HPC outputs over SSH.
 
 ## Implemented local configuration editor
 
-Everything is isolated in [config_editor/](../config_editor/). It uses a Python
+Everything is isolated in [config_editor/](../../gui_periphery/editor/). It uses a Python
 loopback HTTP server, PyYAML, and vanilla HTML/CSS/JavaScript. No CuPy, GPU, Node
 installation, or internet connection is needed to use it after dependency setup.
 

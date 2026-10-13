@@ -19,9 +19,11 @@ draft directly and writes the YAML for you.
 ## Launch
 
 Choose a run name and write the purpose/description in **Purpose & notes**.
-Choose **CSD3 / SSH + Slurm** or **This GPU machine / Colab**. The second choice
+Choose **CSD3 / SSH + Slurm** or **Machine running this GUI**. The second choice
 means the machine running the GUI's Python service, not necessarily the device
 displaying the browser. Running the GUI on your Mac does not give it Colab's GPU.
+On macOS you can prepare and download a run, but local CUDA setup and launch are
+disabled. For a Colab test, open the GUI inside the GPU runtime using the cell below.
 
 For CSD3, enter your GPU account, partition, wall time, and site Python/CUDA module
 names. These are environment settings, separate from the physics YAML. The GUI
@@ -104,9 +106,27 @@ previous results. This needs neither SSH nor a GPU.
 
 ## Colab bootstrap
 
-With this branch already copied to `/content/GPE_simulator`, run one cell:
+Choose a GPU runtime. With the current software synced to
+`MyDrive/GPE_simulator`, this cell mounts Drive, copies the software into the
+runtime, installs the GUI dependencies and opens the interface. It does not copy
+Mac virtual environments or past runs, and leaves the Drive source unchanged.
 
 ```python
+from google.colab import drive
+from pathlib import Path
+import shutil
+
+drive.mount("/content/drive")
+source = Path("/content/drive/MyDrive/GPE_simulator")
+destination = Path("/content/GPE_simulator")
+if not (source / "gui_periphery/colab.py").is_file():
+    raise FileNotFoundError(f"Updated software not found in {source}; check Drive sync and the folder name.")
+destination.mkdir(parents=True, exist_ok=True)
+for folder in ("gpe", "config", "gui_periphery"):
+    shutil.copytree(source / folder, destination / folder, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns(".venv", "__pycache__", "*.pyc", ".DS_Store"))
+shutil.copy2(source / "requirements.txt", destination / "requirements.txt")
+
 %cd /content/GPE_simulator
 %pip install -q -r gui_periphery/requirements.txt
 from gui_periphery.colab import show
@@ -114,7 +134,7 @@ show()
 ```
 
 This displays the same interface through Colab's authenticated port proxy with a
-per-session access token. In **Launch**, choose **This GPU machine / Colab**. If
+per-session access token. In **Launch**, choose **Machine running this GUI**. If
 the runtime already has the matching CuPy installation, you can prepare and launch
 without the environment-setup step. Otherwise use the setup button after selecting
 the appropriate CUDA wheel. Begin with a small experiment and check its monitor
@@ -122,8 +142,8 @@ outputs before a long launch. Nothing silently changes your grid or stage steps.
 
 The proxy entry point uses Colab's
 [`serve_kernel_port_as_iframe`](https://github.com/googlecolab/colabtools/blob/main/google/colab/output/_util.py).
-It has been wired and locally checked for token enforcement, but still needs the
-real Colab GPU smoke test. Notebook disconnection/runtime lifetime limitations
+On 12 October 2026, the user confirmed that simulation launch, configuration editing
+and monitoring worked in Colab. Notebook disconnection/runtime lifetime limitations
 remain unchanged; store important outputs on mounted Drive or copy them there.
 
 ## Implementation and verification
@@ -144,3 +164,9 @@ Local verification for this integration: **76 tests passed, 10 GPU-related skips
 The browser test used synthetic monitor fixtures and did not launch the solver or
 authenticate to CSD3. The core and shared configuration files have no changes from
 the preceding reorganization commit.
+
+The subsequent macOS setup guard passed 22 workflow/bundle tests and a browser
+check. The Colab result above is user-reported live validation. The user also
+confirmed CSD3 authentication, upload, environment setup and submission on
+12 October 2026. GPU execution and live remote monitoring on CSD3 remain unverified
+while the submitted job waits in the queue.

@@ -30,7 +30,13 @@ function targetChanged() {
   const local = $("#run-target").value === "local";
   $("#connection-card").hidden = local;
   document.querySelectorAll(".hpc-setting").forEach(node => node.hidden = local);
-  $("#environment-hint").textContent = local ? "On Colab, use the existing environment if dependencies are installed. Set up environment creates a separate environment for this run when needed." : "Set up environment installs this run's dependencies on the HPC. Skip it when an appropriate environment already exists.";
+  $("#target-hint").textContent = local
+    ? workflowState?.local_execution_error || "Setup and simulation run on the machine hosting this GUI. To use Colab's GPU, open the GUI inside the Colab GPU runtime."
+    : "Prepare the run on this machine, then connect and upload it to the HPC.";
+  const preparedLocal = (workflowState?.run?.target || $("#run-target").value) === "local";
+  $("#environment-hint").textContent = preparedLocal
+    ? workflowState?.local_execution_error || "Set up environment installs dependencies on the machine hosting this GUI. On Colab, you can skip setup if its existing environment is ready."
+    : "Set up environment installs this prepared run's dependencies on the connected HPC after upload. Skip it when an appropriate environment already exists.";
 }
 try {
   const profile = JSON.parse(localStorage.getItem(profileKey) || "{}");
@@ -114,20 +120,21 @@ async function pollState() {
     $("#ssh-connect").disabled ||= connection.connecting || connection.connected;
     $("#download-run").disabled = !folder || op.busy;
     $("#upload-run").disabled ||= !folder || !connection.connected || run.target !== "slurm" || !!run.remote_path;
-    $("#setup-run").disabled ||= !folder || !!run.job_id || !!run.pid || (run.target === "slurm" && (!connection.connected || !run.remote_path));
-    $("#submit-run").disabled ||= !folder || !!run.job_id || !!run.pid || (run.target === "slurm" && (!connection.connected || !run.remote_path));
+    const localBlocked = run.target === "local" && !!workflowState.local_execution_error;
+    $("#setup-run").disabled ||= !folder || !!run.job_id || !!run.pid || localBlocked || (run.target === "slurm" && (!connection.connected || !run.remote_path));
+    $("#submit-run").disabled ||= !folder || !!run.job_id || !!run.pid || localBlocked || (run.target === "slurm" && (!connection.connected || !run.remote_path));
     $("#submit-run").textContent = run.target === "slurm" ? "Submit GPU job" : "Launch simulation";
     $("#cancel-run").disabled ||= !(run.job_id || run.pid) || /completed|failed|cancelled|stopped/i.test(run.status);
     if (folder && folder !== lastFolder) {
       lastFolder = folder;
       $("#run-target").value = run.target;
-      targetChanged();
       $("#monitor-folder").value = "";
       $("#monitor-stage").value = "";
       $("#monitor-spectrum").value = "";
       workflowNotice(`Opened ${run.name}. Launch uses this prepared configuration.`);
       if (selectedView === "monitor") readMonitor();
     }
+    targetChanged();
     if (wasBusy && !op.busy && selectedView === "monitor") readMonitor();
     wasBusy = op.busy;
   } catch (error) { $("#job-badge").textContent = "Workspace connection unavailable"; }

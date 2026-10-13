@@ -2,7 +2,8 @@
 
 Date: 2026-10-12. Branch: `gui-implementation`.
 
-This supplements the original files under `GPE simulator/`; those handoffs were
+This supplements the original files now under [history/](history/), formerly
+`GPE simulator/`; those handoffs were
 not overwritten. They describe earlier layouts and investigation history.
 
 ## Boundaries

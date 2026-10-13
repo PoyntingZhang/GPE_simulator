@@ -102,7 +102,7 @@ are two imaginary cases and eight real cases (static/dynamic/cutoff combinations
 ## YAML and editor behavior
 
 The canonical schema is in `config_editor/configuration.py`; see also
-[config_editor/README.md](../config_editor/README.md). The shared simulation block
+[config_editor/README.md](../../gui_periphery/editor/README.md). The shared simulation block
 sets `N_grids`, `simulation_range`, `data_root`, and `monitor_root`. Stages have
 their own evolution, initial state, cloud, potentials, box, absorber, disorder,
 cutoff, save, and monitor settings. Defaults fill omissions; settings do not
@@ -133,7 +133,7 @@ implicitly inherit from the previous stage.
 Relative simulation output roots resolve against the repository root. Relative
 loaded-state paths resolve against the YAML file's directory. Stages share one
 UTC timestamp per run and normally have separate `stage_01_Name` subdirectories.
-See [gpe/run.md](../gpe/run.md) for `save.directory` overrides and path checks.
+See [gpe/run.md](../../gpe/run.md) for `save.directory` overrides and path checks.
 
 ## Outputs and numerical conventions
 
@@ -209,7 +209,7 @@ python -m gpe.plot_results monitor --latest --tof-limit 5 --k-max 5
 # Add --all-spectra only when a separate PNG for every saved spectrum is wanted.
 ```
 
-CPU checks and separate GPU checks are documented in [gpe/run.md](../gpe/run.md):
+CPU checks and separate GPU checks are documented in [gpe/run.md](../../gpe/run.md):
 
 ```sh
 python -m unittest discover -s config_editor/tests -v

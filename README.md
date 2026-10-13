@@ -19,18 +19,21 @@ python -m gui_periphery.app
 Inside the interface:
 
 1. **Experiment:** create stages or open a YAML file. Saving YAML separately is optional.
-2. **Launch:** enter a run name and notes; choose CSD3 or this GPU machine/Colab.
+2. **Launch:** enter a run name and notes; choose CSD3 or **Machine running this GUI**.
    Enter environment and scheduler settings, then click **Prepare run**.
 3. For CSD3, click **Connect**, answer OpenSSH's password/key/MFA or host-verification
    prompts in the interface, then **Upload run**. Use **Set up environment** if needed,
-   and **Submit GPU job**. On Colab, use the existing environment and **Launch simulation**.
+   and **Submit GPU job**. Inside Colab, use **Set up environment** if needed, then
+   **Launch simulation**. Opening the GUI on a Mac does not connect it to Colab.
 4. **Monitor:** view the saved spectrum, density/TOF/phase image, scalar history and log.
    Select saved spectra, toggle log axes, set the TOF range, and enable independent
    timed refresh. Full wavefunctions are not transferred by monitor refresh.
 
 See [the GUI guide](docs/GUI_WORKFLOW.md) for reopening runs and the single Colab
-bootstrap cell. HPC authentication/submission and Colab GPU execution still require
-live environment checks; they are not claimed verified by local tests.
+bootstrap cell. On 12 October 2026, the user confirmed a successful Colab launch
+with the configuration editor and monitor working. The user also confirmed CSD3
+authentication, upload, environment setup and submission; GPU execution and live
+remote monitoring remain unverified while the job waits in the queue.
 
 ## Software layout
 
@@ -179,14 +182,19 @@ currently targets macOS/Linux with OpenSSH installed. No HPC daemon is installed
 Local regression tests cover fake SSH/scheduler responses, HTTP session boundaries,
 authentication answer routing, portable bundles and partial diagnostic files. A
 headless browser check exercised preparation, download, spectrum/time selection,
-image/scalar controls and refresh using synthetic saved data. Actual CSD3 MFA,
-submission and Colab GPU execution remain the next integration checks. No physics
-code was modified for this GUI.
+image/scalar controls and refresh using synthetic saved data. The user has also
+confirmed a successful Colab GUI run and CSD3 authentication, upload, environment
+setup and submission. GPU execution and live remote monitoring on CSD3 remain the
+next integration checks. No physics code was modified for this GUI.
 
-Existing local `config_editor/.venv` directories are left in place; virtual
-environments are not moved because their executable paths can be absolute.
-Recreate the editor environment using the command above. Historical notebooks and
-original handoff documents are preserved and may refer to the old import paths.
+The repository contains software, tests, reusable example configurations and
+documentation. Personal experiment YAMLs, old notebooks, results and one-off
+launchers are kept outside the software tree; new prepared runs and numerical
+outputs are ignored by Git. The root `.venv/` is the local GUI's installed
+environment and is also ignored. `Open GPE.command` recreates it when needed.
+Original handoffs and design notes are preserved under [docs/history](docs/history/).
+Their text is retained, with relative links adjusted after the move; they describe
+earlier versions and may refer to old import paths. No Obsidian vault is required.
 
 More detail: [runner guide](gpe/run.md), [editor guide](gui_periphery/editor/README.md),
 [refactor handoff](docs/HANDOFF_GUI_REORGANIZATION.md).

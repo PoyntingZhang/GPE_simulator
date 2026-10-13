@@ -1,7 +1,9 @@
 # Local Python/editor files.
 .DS_Store
+.obsidian/
 .venv/
 __pycache__/
+*.py[cod]
 .pytest_cache/
 .ipynb_checkpoints/
 
@@ -19,6 +21,8 @@ __pycache__/
 /saved_data/
 /monitor_data/
 /logs/
+# Accidental nested checkout/prepared-run directory.
+/GPE_simulator/
 
 # Local experiment configurations/notebooks. Keep packaged examples visible.
 /*.yaml
@@ -30,8 +34,7 @@ __pycache__/
 # One-off launchers and instructions tied to particular saved runs.
 /continue_relaxation.sh
 /relax_a20.sh
-/studies/run_power_law_study.sh
-/studies/POWER_LAW_STUDY.txt
+/studies/
 
 # Numerical outputs, snapshot metadata, logs, and result archives elsewhere.
 *.npy
@@ -40,5 +43,6 @@ psi_*.json
 *.log
 *.zip
 *.zip.partial
+*.tar.gz
 slurm-*.out
 slurm-*.err

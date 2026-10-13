@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
+import platform
 import re
 import shlex
 import signal
@@ -15,6 +16,14 @@ import threading
 
 from .connection import Connection
 from .prepare_run import ROOT, prepare_run
+
+
+def local_execution_error():
+    if platform.system() == "Darwin":
+        return ("This GUI is running on macOS, where this simulator's CUDA environment cannot run. "
+                "You can prepare and download a run here. For Colab, open the GUI inside a GPU runtime; "
+                "for HPC, prepare a CSD3 run, connect and upload before setting up the environment.")
+    return ""
 
 
 def launch_settings(values):
@@ -127,7 +136,8 @@ class Workflow:
         with self.lock:
             operation = dict(self.operation)
         return dict(connection=self.connection.status(), operation=operation,
-                    run=dict(self.run), folder=str(self.folder) if self.folder else None)
+                    run=dict(self.run), folder=str(self.folder) if self.folder else None,
+                    local_execution_error=local_execution_error())
 
     def start(self, name, function):
         with self.lock:
@@ -216,6 +226,8 @@ class Workflow:
             command = f"cd {shlex.quote(self.remote())} && bash setup_environment.sh"
             self.stream(self.connection.command(command))
         else:
+            if error := local_execution_error():
+                raise ValueError(error)
             self.stream(["bash", "setup_environment.sh"], cwd=self.folder)
         self.run["status"] = "Environment ready"
         self.save_state()
@@ -237,6 +249,8 @@ class Workflow:
             self.run.update(job_id=job_id, status="Submitted")
             self.log(output)
         else:
+            if error := local_execution_error():
+                raise ValueError(error)
             # The existing runtime environment is useful for Colab. GPU validation
             # runs before the stage loop, without altering any simulation settings.
             check = ('source ./environment.sh; python -c '

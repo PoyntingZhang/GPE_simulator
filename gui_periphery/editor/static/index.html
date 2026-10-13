@@ -74,7 +74,8 @@
           <div class="card-heading"><span class="section-number">1</span><div><h2>Run &amp; destination</h2><p>A distinct folder for every launch</p></div></div>
           <div class="form-grid">
             <label class="field">Run folder name<input id="run-name" placeholder="simulation_rotation_test" spellcheck="false"><small>Leave blank for a timestamped name.</small></label>
-            <label class="field">Run on<select id="run-target"><option value="slurm">CSD3 / SSH + Slurm</option><option value="local">This GPU machine / Colab</option></select></label>
+            <label class="field">Run on<select id="run-target"><option value="slurm">CSD3 / SSH + Slurm</option><option value="local">Machine running this GUI</option></select></label>
+            <p id="target-hint" class="hint span-all"></p>
             <label class="field span-all">Purpose &amp; notes<textarea id="run-notes" rows="3" placeholder="This simulation studies… We save…"></textarea><small>Saved as notes.txt alongside the configuration.</small></label>
             <label class="field span-all">Prepared runs folder<input id="run-output" placeholder="Default: runs/ in this repository" spellcheck="false"></label>
           </div>

@@ -56,7 +56,8 @@ class GuiWorkflowTests(unittest.TestCase):
 
     def test_local_preflight_failure_does_not_launch_a_process(self):
         self.prepare()
-        with patch.object(self.workflow, "stream", side_effect=ValueError("CuPy unavailable")), \
+        with patch("gui_periphery.workflow.platform.system", return_value="Linux"), \
+             patch.object(self.workflow, "stream", side_effect=ValueError("CuPy unavailable")), \
              patch("gui_periphery.workflow.subprocess.Popen") as popen:
             with self.assertRaisesRegex(ValueError, "CuPy unavailable"):
                 self.workflow.submit()
@@ -66,7 +67,8 @@ class GuiWorkflowTests(unittest.TestCase):
     def test_local_launch_is_detached_and_completion_is_read_on_reopen(self):
         folder = self.prepare()
         process = Mock(pid=98765); process.poll.return_value = None
-        with patch.object(self.workflow, "stream"), patch("gui_periphery.workflow.subprocess.Popen", return_value=process) as popen:
+        with patch("gui_periphery.workflow.platform.system", return_value="Linux"), \
+             patch.object(self.workflow, "stream"), patch("gui_periphery.workflow.subprocess.Popen", return_value=process) as popen:
             self.workflow.submit()
             self.assertTrue(popen.call_args.kwargs["start_new_session"])
         self.workflow.open(folder)
@@ -74,6 +76,43 @@ class GuiWorkflowTests(unittest.TestCase):
         (folder / "logs/exit_code").write_text("0\n")
         self.workflow.refresh()
         self.assertEqual(self.workflow.run["status"], "Completed")
+
+    def test_macos_can_prepare_but_cannot_install_cuda_or_launch_locally(self):
+        with patch("gui_periphery.workflow.platform.system", return_value="Darwin"):
+            folder = self.prepare()
+            self.assertTrue((folder / "config/run.yaml").is_file())
+            self.assertIn("macOS", self.workflow.state()["local_execution_error"])
+            with patch.object(self.workflow, "stream") as stream, \
+                 patch("gui_periphery.workflow.subprocess.Popen") as popen:
+                for action in (self.workflow.setup, self.workflow.submit):
+                    with self.subTest(action=action.__name__), self.assertRaisesRegex(ValueError, "Colab"):
+                        action()
+                stream.assert_not_called()
+                popen.assert_not_called()
+            self.assertEqual(self.workflow.run["status"], "Prepared")
+            self.assertNotIn("pid", self.workflow.run)
+
+    def test_macos_hpc_setup_still_runs_over_ssh(self):
+        self.prepare("slurm")
+        self.workflow.run.update(remote_path="/rds/test", ssh_target="user@host")
+        self.workflow.connection.target = "user@host"
+        with patch("gui_periphery.workflow.platform.system", return_value="Darwin"), \
+             patch.object(self.workflow.connection, "check", return_value=True), \
+             patch.object(self.workflow, "stream") as stream:
+            self.workflow.setup()
+        arguments = stream.call_args.args[0]
+        self.assertEqual(arguments[0], "ssh")
+        self.assertIn("cd /rds/test && bash setup_environment.sh", arguments)
+        self.assertEqual(self.workflow.run["status"], "Environment ready")
+
+    def test_linux_local_setup_is_still_available(self):
+        self.prepare()
+        with patch("gui_periphery.workflow.platform.system", return_value="Linux"), \
+             patch.object(self.workflow, "stream") as stream:
+            self.assertEqual(self.workflow.state()["local_execution_error"], "")
+            self.workflow.setup()
+        stream.assert_called_once_with(["bash", "setup_environment.sh"], cwd=self.workflow.folder)
+        self.assertEqual(self.workflow.run["status"], "Environment ready")
 
     def test_upload_and_submission_use_a_new_folder_and_persist_job_id(self):
         self.prepare("slurm")
